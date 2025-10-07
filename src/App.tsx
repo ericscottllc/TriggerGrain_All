@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { LoadingSpinner } from './components/Core/LoadingSpinner';
 import { LoginPage } from './components/Core/LoginPage';
+import { PendingApprovalPage } from './components/Core/PendingApprovalPage';
 import { Sidebar } from './components/Core/Sidebar';
 import { CodeExplorer } from './CodeExplorer';
 import { SchemaExplorer } from './SchemaExplorer';
@@ -19,7 +20,7 @@ import { ScenarioPage } from './pages/scenario';
 import { ClientsPage } from './pages/clients';
 
 const AppContent: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const [showCodeExplorer, setShowCodeExplorer] = useState(false);
   const [showSchemaExplorer, setShowSchemaExplorer] = useState(false);
 
@@ -45,6 +46,10 @@ const AppContent: React.FC = () => {
 
   if (!user) {
     return <LoginPage />;
+  }
+
+  if (userProfile && userProfile.status === 'pending') {
+    return <PendingApprovalPage />;
   }
 
   return (
