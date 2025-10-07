@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { LucideIcon } from 'lucide-react';
+import { Video as LucideIcon } from 'lucide-react';
 
 interface PlaceholderPageProps {
   title: string;
