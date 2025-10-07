@@ -1,36 +1,16 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, ChevronLeft, ChevronRight, Brain as Grain } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigation } from '../../hooks/useNavigation';
-import { NavigationItem } from '../../types/navigation';
+import { NAVIGATION_ITEMS } from '../../config/navigation';
 import { getIconComponent } from '../../utils/iconMapper';
 
-interface SidebarProps {
-  activeItem: string;
-  onItemClick: (item: NavigationItem) => void;
-}
-
-export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => {
+export const Sidebar: React.FC = () => {
   const { user, signOut } = useAuth();
-  const { navigationItems, loading, error } = useNavigation();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-
-  const handleItemClick = (item: NavigationItem) => {
-    // Check if we're already on the target subdomain
-    const currentHost = window.location.hostname;
-    const targetHost = item.subdomain.replace(/^https?:\/\//, '');
-    const isOnTargetSite = currentHost === targetHost;
-
-    if (item.redirect_active && !isOnTargetSite) {
-      // Only redirect if we're not already on the target site
-      window.location.href = `https://${item.subdomain}`;
-    } else {
-      // Show local content (either redirect_active=false or already on target site)
-      onItemClick(item);
-    }
-  };
 
   return (
     <motion.div
@@ -41,7 +21,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
       animate={{ width: isCollapsed ? 80 : 288 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
-
       {/* Header */}
       <div className="p-6 border-b border-gray-200 relative z-10">
         <div className="flex items-center justify-between">
@@ -55,9 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
                 className="flex items-center gap-3"
               >
                 <div className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center p-1">
-                  <img 
-                    src="/Trigger-Grain-Marketing_SQUARE.png" 
-                    alt="TriggerGrain Logo" 
+                  <img
+                    src="/Trigger-Grain-Marketing_SQUARE.png"
+                    alt="TriggerGrain Logo"
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -65,12 +44,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
                   <h1 className="text-xl font-bold text-gray-800">
                     TriggerGrain
                   </h1>
-                  <p className="text-xs text-gray-500">Account Management</p>
+                  <p className="text-xs text-gray-500">Grain Management</p>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-          
+
           <motion.button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -88,76 +67,64 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
 
       {/* Navigation */}
       <div className="p-4 space-y-2 relative z-10 flex-1 overflow-y-auto">
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-2 border-tg-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-        
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-            Failed to load navigation. Using fallback items.
-          </div>
-        )}
-        
-        {navigationItems.map((item, index) => {
+        {NAVIGATION_ITEMS.map((item, index) => {
           const IconComponent = getIconComponent(item.icon_name);
-          const isActive = activeItem === item.id;
-          
+          const isActive = location.pathname === item.path;
+
           return (
-            <motion.button
-              key={item.id}
-              onClick={() => handleItemClick(item)}
-              onHoverStart={() => setHoveredItem(item.id)}
-              onHoverEnd={() => setHoveredItem(null)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 relative overflow-hidden ${
-                isActive
-                  ? getActiveStyles(item.color)
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              whileHover={{ x: 4 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {/* Hover Effect */}
-              {hoveredItem === item.id && !isActive && (
-                <div className={`absolute inset-0 ${getHoverStyles(item.color)} rounded-xl`} />
-              )}
-
-              {/* Active Indicator */}
-              {activeItem === item.id && (
-                <motion.div
-                  layoutId="activeIndicator"
-                  className="absolute left-0 top-0 bottom-0 w-1 bg-white/80 rounded-r-full"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
-              )}
-
-              {/* Icon */}
-              <div className={`flex-shrink-0 p-1 rounded-lg ${
-                isActive ? 'bg-white/20' : ''
-              }`}>
-                <IconComponent className="w-5 h-5" />
-              </div>
-
-              {/* Label */}
-              <AnimatePresence mode="wait">
-                {!isCollapsed && (
-                  <motion.div
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex-1 text-left"
-                  >
-                    <span className="font-medium">{item.title}</span>
-                  </motion.div>
+            <Link key={item.id} to={item.path}>
+              <motion.div
+                onHoverStart={() => setHoveredItem(item.id)}
+                onHoverEnd={() => setHoveredItem(null)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 relative overflow-hidden ${
+                  isActive
+                    ? getActiveStyles(item.color)
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {/* Hover Effect */}
+                {hoveredItem === item.id && !isActive && (
+                  <div className={`absolute inset-0 ${getHoverStyles(item.color)} rounded-xl`} />
                 )}
-              </AnimatePresence>
-            </motion.button>
+
+                {/* Active Indicator */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeIndicator"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-white/80 rounded-r-full"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+
+                {/* Icon */}
+                <div className={`flex-shrink-0 p-1 rounded-lg ${
+                  isActive ? 'bg-white/20' : ''
+                }`}>
+                  <IconComponent className="w-5 h-5" />
+                </div>
+
+                {/* Label */}
+                <AnimatePresence mode="wait">
+                  {!isCollapsed && (
+                    <motion.div
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: 'auto' }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex-1 text-left"
+                    >
+                      <span className="font-medium">{item.title}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </Link>
           );
         })}
       </div>
@@ -187,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
             )}
           </AnimatePresence>
         </div>
-        
+
         <motion.button
           onClick={signOut}
           className="w-full flex items-center gap-3 p-3 rounded-xl text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
@@ -214,7 +181,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemClick }) => 
   );
 };
 
-// Helper functions for styling based on color
 const getActiveStyles = (color: string): string => {
   switch (color) {
     case 'tg-primary':
