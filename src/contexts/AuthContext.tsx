@@ -36,17 +36,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       const { data, error } = await supabase
         .rpc('get_user_info', { user_id: userId })
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+      }
 
       if (data) {
-        setUserProfile({
+        return {
           id: userId,
           email: data.user_email,
           full_name: data.user_email,
@@ -54,49 +58,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           is_active: data.user_status === 'active',
           role_name: data.role_name || 'Pending',
           is_admin: data.is_admin || false
-        });
+        };
       }
+      return null;
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      setUserProfile(null);
+      return null;
     }
   };
 
   const refreshUserProfile = async () => {
     if (user) {
-      await fetchUserProfile(user.id);
+      const profile = await fetchUserProfile(user.id);
+      setUserProfile(profile);
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchUserProfile(session.user.id);
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (session?.user) {
+          setUser(session.user);
+          const profile = await fetchUserProfile(session.user.id);
+          if (mounted) {
+            setUserProfile(profile);
+          }
+        } else {
+          setUser(null);
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        if (mounted) {
+          setUser(null);
+          setUserProfile(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setInitializing(false);
+        }
       }
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        setUser(session?.user ?? null);
+        if (!mounted) return;
+
         if (session?.user) {
-          await fetchUserProfile(session.user.id);
+          setUser(session.user);
+          const profile = await fetchUserProfile(session.user.id);
+          if (mounted) {
+            setUserProfile(profile);
+          }
         } else {
+          setUser(null);
           setUserProfile(null);
         }
-        setLoading(false);
+
+        if (!initializing && mounted) {
+          setLoading(false);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
+    setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    if (!error) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user.id);
+        setUserProfile(profile);
+      }
+    }
+
+    setLoading(false);
     return { error };
   };
 
@@ -114,8 +169,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    setLoading(true);
     await supabase.auth.signOut();
+    setUser(null);
     setUserProfile(null);
+    setLoading(false);
   };
 
   return (
