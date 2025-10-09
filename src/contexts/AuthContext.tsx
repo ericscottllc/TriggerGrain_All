@@ -36,12 +36,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initializing, setInitializing] = useState(true);
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       const { data, error } = await supabase
-        .rpc('get_user_info', { user_id: userId })
+        .rpc('get_user_info', { p_user_id: userId })
         .maybeSingle();
 
       if (error) {
@@ -102,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         if (mounted) {
           setLoading(false);
-          setInitializing(false);
         }
       }
     };
@@ -122,10 +120,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setUser(null);
           setUserProfile(null);
-        }
-
-        if (!initializing && mounted) {
-          setLoading(false);
         }
       }
     );
