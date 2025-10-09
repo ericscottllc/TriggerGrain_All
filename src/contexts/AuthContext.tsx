@@ -77,29 +77,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initializeAuth = async () => {
+      console.log('[AuthContext] Initializing auth...');
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('[AuthContext] Got session:', session ? 'exists' : 'null');
 
         if (!mounted) return;
 
         if (session?.user) {
+          console.log('[AuthContext] Setting user from session:', session.user.email);
           setUser(session.user);
           const profile = await fetchUserProfile(session.user.id);
+          console.log('[AuthContext] Fetched profile:', profile);
           if (mounted) {
             setUserProfile(profile);
           }
         } else {
+          console.log('[AuthContext] No session, clearing user');
           setUser(null);
           setUserProfile(null);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        console.error('[AuthContext] Error initializing auth:', error);
         if (mounted) {
           setUser(null);
           setUserProfile(null);
         }
       } finally {
         if (mounted) {
+          console.log('[AuthContext] Setting loading to false after initialization');
           setLoading(false);
         }
       }
@@ -108,19 +114,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log('[AuthContext] Auth state changed:', event, session ? 'has session' : 'no session');
         if (!mounted) return;
 
         if (session?.user) {
+          console.log('[AuthContext] Auth state change - setting user:', session.user.email);
           setUser(session.user);
           const profile = await fetchUserProfile(session.user.id);
+          console.log('[AuthContext] Auth state change - fetched profile:', profile);
           if (mounted) {
             setUserProfile(profile);
           }
         } else {
+          console.log('[AuthContext] Auth state change - clearing user');
           setUser(null);
           setUserProfile(null);
         }
+
+        console.log('[AuthContext] Auth state change complete');
       }
     );
 
@@ -131,20 +143,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
+    console.log('[AuthContext] signInWithEmail called');
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    console.log('[AuthContext] signInWithPassword result:', error ? 'error' : 'success');
+
     if (!error) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        console.log('[AuthContext] Fetching profile after login');
         const profile = await fetchUserProfile(session.user.id);
         setUserProfile(profile);
+        console.log('[AuthContext] Profile set after login');
       }
     }
 
+    console.log('[AuthContext] Setting loading to false after signInWithEmail');
     setLoading(false);
     return { error };
   };

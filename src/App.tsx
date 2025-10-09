@@ -25,6 +25,16 @@ const AppContent: React.FC = () => {
   const [showSchemaExplorer, setShowSchemaExplorer] = useState(false);
 
   React.useEffect(() => {
+    console.log('[AppContent] Render state:', {
+      loading,
+      hasUser: !!user,
+      userEmail: user?.email,
+      hasProfile: !!userProfile,
+      profileStatus: userProfile?.status
+    });
+  }, [loading, user, userProfile]);
+
+  React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'C') {
         event.preventDefault();
@@ -41,16 +51,21 @@ const AppContent: React.FC = () => {
   }, []);
 
   if (loading) {
+    console.log('[AppContent] Showing loading spinner');
     return <LoadingSpinner />;
   }
 
   if (!user) {
+    console.log('[AppContent] No user, showing login page');
     return <LoginPage />;
   }
 
   if (userProfile && userProfile.status === 'pending') {
+    console.log('[AppContent] User pending approval');
     return <PendingApprovalPage />;
   }
+
+  console.log('[AppContent] Showing main app');
 
   return (
     <>
