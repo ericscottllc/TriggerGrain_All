@@ -110,6 +110,28 @@ const captureCanvas = async (element: HTMLElement): Promise<HTMLCanvasElement> =
       const clonedElement = clonedDoc.getElementById('onepager-clone');
       if (clonedElement) {
         console.log('Clone element found in cloned document');
+
+        const allCells = clonedElement.querySelectorAll('td');
+        allCells.forEach((cell: Element) => {
+          if (cell instanceof HTMLElement) {
+            const height = parseInt(cell.style.height || '0');
+            const lineHeight = parseInt(cell.style.lineHeight || '0');
+
+            if (height > 0 && lineHeight > 0 && height === lineHeight) {
+              const fontSize = 14;
+              const topPadding = Math.floor((height - fontSize) / 2);
+              const bottomPadding = height - fontSize - topPadding;
+
+              cell.style.paddingTop = `${topPadding}px`;
+              cell.style.paddingBottom = `${bottomPadding}px`;
+              cell.style.lineHeight = 'normal';
+              cell.style.display = 'table-cell';
+              cell.style.verticalAlign = 'middle';
+            }
+          }
+        });
+
+        console.log('Applied vertical centering fixes to table cells');
       }
     }
   });
