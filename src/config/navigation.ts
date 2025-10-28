@@ -22,13 +22,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     color: 'tg-green'
   },
   {
-    id: 'settings',
-    title: 'Settings',
-    icon_name: 'Settings',
-    path: '/settings',
-    color: 'tg-grey'
-  },
-  {
     id: 'one-pager',
     title: 'One Pager',
     icon_name: 'FileText',
@@ -55,5 +48,12 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     icon_name: 'Users',
     path: '/clients',
     color: 'tg-primary'
+  },
+  {
+    id: 'settings',
+    title: 'Settings',
+    icon_name: 'Settings',
+    path: '/settings',
+    color: 'tg-grey'
   }
 ];
