@@ -16,7 +16,22 @@ import {
 import type { AnalyticsFilters } from './types/analyticsTypes';
 
 export const AnalyticsPage = () => {
-  const { entries, crops, classes, elevators, towns, loading, fetchEntries, fetchMetadata } = useAnalyticsData();
+  const {
+    entries,
+    allCachedEntries,
+    crops,
+    classes,
+    elevators,
+    towns,
+    loading,
+    querying,
+    cacheTimestamp,
+    usingCache,
+    queryAllData,
+    applyFilters,
+    fetchMetadata
+  } = useAnalyticsData();
+
   const [filters, setFilters] = useState<Partial<AnalyticsFilters>>({
     dateRange: '90dates',
     crop_ids: [],
@@ -27,14 +42,39 @@ export const AnalyticsPage = () => {
   });
   const [comparisonMode, setComparisonMode] = useState<'single' | 'multi'>('single');
   const [activeView, setActiveView] = useState<'overview' | 'by-crop' | 'by-location' | 'term-structure'>('overview');
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   useEffect(() => {
     fetchMetadata();
   }, [fetchMetadata]);
 
   useEffect(() => {
-    fetchEntries(filters);
-  }, [filters, fetchEntries]);
+    const initializeData = async () => {
+      if (!initialLoadComplete) {
+        if (allCachedEntries.length === 0) {
+          await queryAllData();
+        }
+        setInitialLoadComplete(true);
+      }
+    };
+
+    initializeData();
+  }, [allCachedEntries.length, initialLoadComplete, queryAllData]);
+
+  useEffect(() => {
+    if (initialLoadComplete && allCachedEntries.length > 0) {
+      applyFilters(filters);
+    }
+  }, [filters, initialLoadComplete, allCachedEntries.length, applyFilters]);
+
+  const handleQueryData = async () => {
+    await queryAllData();
+    applyFilters(filters);
+  };
+
+  const handleFiltersChange = (newFilters: Partial<AnalyticsFilters>) => {
+    setFilters(newFilters);
+  };
 
   const termStructureData = useMemo(() => {
     return transformAnalyticsDataForTermStructure(entries);
@@ -90,13 +130,18 @@ export const AnalyticsPage = () => {
         <div className="max-w-7xl mx-auto space-y-6">
           <AnalyticsFiltersPanel
             filters={filters}
-            onFiltersChange={setFilters}
+            onFiltersChange={handleFiltersChange}
             crops={crops}
             classes={classes}
             elevators={elevators}
             towns={towns}
             comparisonMode={comparisonMode}
             onComparisonModeChange={setComparisonMode}
+            onQueryData={handleQueryData}
+            querying={querying}
+            usingCache={usingCache}
+            cacheTimestamp={cacheTimestamp}
+            totalCachedEntries={allCachedEntries.length}
           />
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -148,9 +193,14 @@ export const AnalyticsPage = () => {
             </div>
           </div>
 
-          {loading ? (
+          {loading || querying ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
+                {querying && (
+                  <p className="text-sm text-gray-600">Loading all grain entries from database...</p>
+                )}
+              </div>
             </div>
           ) : entries.length > 0 ? (
             <div className="space-y-6">
@@ -245,9 +295,13 @@ export const AnalyticsPage = () => {
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
               <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">No data available</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                {allCachedEntries.length === 0 ? 'No data loaded' : 'No data available'}
+              </h3>
               <p className="text-gray-600">
-                Try adjusting your filters or ensure grain entries exist for the selected date range.
+                {allCachedEntries.length === 0
+                  ? 'Click "Query Data" to load grain entries from the database.'
+                  : 'Try adjusting your filters or ensure grain entries exist for the selected date range.'}
               </p>
             </div>
           )}

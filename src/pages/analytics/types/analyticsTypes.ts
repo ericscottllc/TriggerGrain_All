@@ -16,6 +16,8 @@ export interface GrainEntry {
   class_id: string;
   elevator_id: string;
   town_id: string;
+  month: string;
+  year: number;
   cash_price: number | null;
   futures: number | null;
   basis: number | null;

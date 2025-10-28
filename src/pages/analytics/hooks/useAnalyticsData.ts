@@ -1,17 +1,23 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { rpcWithRetry } from '../../../utils/supabaseUtils';
 import type { GrainEntry, AnalyticsFilters, MasterCrop, CropClass, MasterElevator, MasterTown, MasterRegion } from '../types/analyticsTypes';
+import { getCachedData, saveCachedData, getCacheTimestamp } from '../utils/cacheUtils';
+import { applyLocalFilters, getLastNDatesFromEntries, getDateRangeCount } from '../utils/filterUtils';
 
 export const useAnalyticsData = () => {
   const [entries, setEntries] = useState<GrainEntry[]>([]);
+  const [allCachedEntries, setAllCachedEntries] = useState<GrainEntry[]>([]);
   const [crops, setCrops] = useState<MasterCrop[]>([]);
   const [classes, setClasses] = useState<CropClass[]>([]);
   const [elevators, setElevators] = useState<MasterElevator[]>([]);
   const [towns, setTowns] = useState<MasterTown[]>([]);
   const [regions, setRegions] = useState<MasterRegion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [querying, setQuerying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
 
   const fetchMetadata = useCallback(async () => {
     try {
@@ -39,12 +45,23 @@ export const useAnalyticsData = () => {
     }
   }, []);
 
-  const fetchEntries = useCallback(async (filters?: Partial<AnalyticsFilters>) => {
+  useEffect(() => {
+    const cached = getCachedData();
+    const timestamp = getCacheTimestamp();
+
+    if (cached && cached.length > 0) {
+      setAllCachedEntries(cached);
+      setCacheTimestamp(timestamp);
+      setUsingCache(true);
+    }
+  }, []);
+
+  const queryAllData = useCallback(async () => {
     try {
-      setLoading(true);
+      setQuerying(true);
       setError(null);
 
-      let query = supabase
+      const query = supabase
         .from('grain_entries')
         .select(`
           *,
@@ -53,68 +70,68 @@ export const useAnalyticsData = () => {
           master_elevators(name),
           master_towns(name, province)
         `)
-        .eq('is_active', true);
-
-      if (filters?.dateRange) {
-        const numDates = parseInt(filters.dateRange.replace('dates', ''));
-        const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: numDates });
-        if (datesError) {
-          console.error('[useAnalyticsData] Error fetching last dates:', datesError);
-        }
-        if (lastDates && lastDates.length > 0) {
-          query = query.in('date', lastDates);
-        }
-      } else {
-        const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: 30 });
-        if (datesError) {
-          console.error('[useAnalyticsData] Error fetching last dates (default):', datesError);
-        }
-        if (lastDates && lastDates.length > 0) {
-          query = query.in('date', lastDates);
-        }
-      }
-
-      if (filters?.crop_ids && filters.crop_ids.length > 0) {
-        query = query.in('crop_id', filters.crop_ids);
-      }
-
-      if (filters?.class_ids && filters.class_ids.length > 0) {
-        query = query.in('class_id', filters.class_ids);
-      }
-
-      if (filters?.elevator_ids && filters.elevator_ids.length > 0) {
-        query = query.in('elevator_id', filters.elevator_ids);
-      }
-
-      if (filters?.town_ids && filters.town_ids.length > 0) {
-        query = query.in('town_id', filters.town_ids);
-      }
-
-      query = query.order('date', { ascending: false });
+        .eq('is_active', true)
+        .order('date', { ascending: false })
+        .limit(100000);
 
       const { data, error: entriesError } = await query;
 
       if (entriesError) throw entriesError;
 
-      setEntries(data || []);
+      const entries = data || [];
+
+      setAllCachedEntries(entries);
+      saveCachedData(entries);
+      setCacheTimestamp(Date.now());
+      setUsingCache(true);
+
+      return entries;
     } catch (err) {
-      console.error('Error fetching entries:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch entries');
+      console.error('Error querying all data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to query data');
+      return null;
     } finally {
-      setLoading(false);
+      setQuerying(false);
     }
   }, []);
 
+  const applyFilters = useCallback((filters?: Partial<AnalyticsFilters>) => {
+    setLoading(true);
+
+    try {
+      if (allCachedEntries.length === 0) {
+        setEntries([]);
+        return;
+      }
+
+      const dateCount = filters?.dateRange ? getDateRangeCount(filters.dateRange) : 90;
+      const lastNDates = getLastNDatesFromEntries(allCachedEntries, dateCount);
+
+      const filtered = applyLocalFilters(allCachedEntries, filters || {}, lastNDates);
+      setEntries(filtered);
+    } catch (err) {
+      console.error('Error applying filters:', err);
+      setError(err instanceof Error ? err.message : 'Failed to apply filters');
+    } finally {
+      setLoading(false);
+    }
+  }, [allCachedEntries]);
+
   return {
     entries,
+    allCachedEntries,
     crops,
     classes,
     elevators,
     towns,
     regions,
     loading,
+    querying,
     error,
-    fetchEntries,
+    cacheTimestamp,
+    usingCache,
+    queryAllData,
+    applyFilters,
     fetchMetadata,
   };
 };

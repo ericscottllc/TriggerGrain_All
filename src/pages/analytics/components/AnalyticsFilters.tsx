@@ -1,6 +1,7 @@
 import React from 'react';
-import { Filter } from 'lucide-react';
+import { Filter, Database, RefreshCw, Clock } from 'lucide-react';
 import type { AnalyticsFilters, MasterCrop, CropClass, MasterElevator, MasterTown } from '../types/analyticsTypes';
+import { getCacheAge } from '../utils/cacheUtils';
 
 interface AnalyticsFiltersProps {
   filters: Partial<AnalyticsFilters>;
@@ -11,6 +12,11 @@ interface AnalyticsFiltersProps {
   towns: MasterTown[];
   comparisonMode?: 'single' | 'multi';
   onComparisonModeChange?: (mode: 'single' | 'multi') => void;
+  onQueryData?: () => void;
+  querying?: boolean;
+  usingCache?: boolean;
+  cacheTimestamp?: number | null;
+  totalCachedEntries?: number;
 }
 
 export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
@@ -22,6 +28,11 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
   towns,
   comparisonMode = 'single',
   onComparisonModeChange,
+  onQueryData,
+  querying = false,
+  usingCache = false,
+  cacheTimestamp = null,
+  totalCachedEntries = 0,
 }) => {
   const handleDateRangeChange = (dateRange: AnalyticsFilters['dateRange']) => {
     onFiltersChange({ ...filters, dateRange });
@@ -45,6 +56,8 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
       region_ids: [],
     });
   };
+
+  const cacheAge = cacheTimestamp ? getCacheAge() : null;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -80,12 +93,47 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
             </div>
           )}
         </div>
-        <button
-          onClick={clearFilters}
-          className="text-sm text-tg-green hover:text-tg-green/80 transition-colors"
-        >
-          Clear All
-        </button>
+        <div className="flex items-center gap-3">
+          {usingCache && cacheAge && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-tg-green/10 rounded-lg">
+              <Database className="w-4 h-4 text-tg-green" />
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-tg-green">
+                  {totalCachedEntries.toLocaleString()} entries cached
+                </span>
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <Clock className="w-3 h-3" />
+                  <span>Updated {cacheAge}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {onQueryData && (
+            <button
+              onClick={onQueryData}
+              disabled={querying}
+              className="flex items-center gap-2 px-4 py-2 bg-tg-green text-white rounded-lg hover:bg-tg-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {querying ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Querying...</span>
+                </>
+              ) : (
+                <>
+                  <Database className="w-4 h-4" />
+                  <span>Query Data</span>
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={clearFilters}
+            className="text-sm text-tg-green hover:text-tg-green/80 transition-colors"
+          >
+            Clear All
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
