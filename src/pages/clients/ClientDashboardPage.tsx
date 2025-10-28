@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Users, ArrowLeft, Edit, Building2, MapPin, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
 import { useClientDetails } from './hooks/useClientDetails';
 import { useClientPricing } from './hooks/useClientPricing';
+import { CropClassChartPanel } from './components/CropClassChartPanel';
+import { transformPricingDataForCharts, getDateRange } from './utils/chartDataTransform';
 import type { ClientStatus } from './types/clientTypes';
 
 export const ClientDashboardPage: React.FC = () => {
@@ -17,9 +19,17 @@ export const ClientDashboardPage: React.FC = () => {
 
   React.useEffect(() => {
     if (clientId && showPricing) {
-      fetchClientPricing({ dateRange: '30days', sortBy: 'date', sortOrder: 'desc' });
+      fetchClientPricing({ dateRange: '30dates', sortBy: 'date', sortOrder: 'desc' });
     }
   }, [clientId, showPricing, fetchClientPricing]);
+
+  const chartData = useMemo(() => {
+    return transformPricingDataForCharts(pricingData);
+  }, [pricingData]);
+
+  const dateRange = useMemo(() => {
+    return getDateRange(pricingData);
+  }, [pricingData]);
 
   const getStatusColor = (status: ClientStatus) => {
     switch (status) {
@@ -233,9 +243,16 @@ export const ClientDashboardPage: React.FC = () => {
             >
               <div className="flex items-center gap-3">
                 <BarChart3 className="w-5 h-5 text-tg-green" />
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Pricing Analytics (Last 30 Days)
-                </h2>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Pricing Analytics (Last 30 Dates)
+                  </h2>
+                  {dateRange && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      {new Date(dateRange.start).toLocaleDateString()} - {new Date(dateRange.end).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
               </div>
               {showPricing ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
             </button>
@@ -245,64 +262,21 @@ export const ClientDashboardPage: React.FC = () => {
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
                   </div>
-                ) : pricingData.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Crop</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Elevator</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Town</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cash Price</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Futures</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Basis</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {pricingData.slice(0, 20).map((entry, index) => (
-                          <motion.tr
-                            key={entry.id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.2, delay: index * 0.02 }}
-                          >
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {new Date(entry.date).toLocaleDateString()}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.master_crops?.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.crop_classes?.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.master_elevators?.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.master_towns?.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                              {entry.cash_price ? `$${entry.cash_price.toFixed(2)}` : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                              {entry.futures ? `$${entry.futures.toFixed(2)}` : '-'}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-medium ${
-                              entry.basis && entry.basis > 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {entry.basis ? `$${entry.basis.toFixed(2)}` : '-'}
-                            </td>
-                          </motion.tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {pricingData.length > 20 && (
-                      <div className="mt-4 text-sm text-gray-500 text-center">
-                        Showing 20 of {pricingData.length} entries
-                      </div>
-                    )}
+                ) : chartData.length > 0 ? (
+                  <div className="space-y-6">
+                    {chartData.map((cropClassData, index) => (
+                      <motion.div
+                        key={cropClassData.cropClassName}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                      >
+                        <CropClassChartPanel
+                          chartData={cropClassData}
+                          defaultExpanded={index === 0}
+                        />
+                      </motion.div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-8">

@@ -52,38 +52,45 @@ export const useClientPricing = (clientId: string | undefined) => {
         .in('town_id', townIds);
 
       if (filters?.dateRange) {
-        const today = new Date();
-        let startDate: Date;
+        if (filters.dateRange === '30dates') {
+          const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: 30 });
+          if (lastDates && lastDates.length > 0) {
+            query = query.in('date', lastDates);
+          }
+        } else if (filters.dateRange === 'custom') {
+          if (filters.startDate) {
+            query = query.gte('date', filters.startDate);
+          }
+          if (filters.endDate) {
+            query = query.lte('date', filters.endDate);
+          }
+        } else {
+          const today = new Date();
+          let startDate: Date;
 
-        switch (filters.dateRange) {
-          case '7days':
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - 7);
-            query = query.gte('date', startDate.toISOString().split('T')[0]);
-            break;
-          case '30days':
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - 30);
-            query = query.gte('date', startDate.toISOString().split('T')[0]);
-            break;
-          case '90days':
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - 90);
-            query = query.gte('date', startDate.toISOString().split('T')[0]);
-            break;
-          case 'custom':
-            if (filters.startDate) {
-              query = query.gte('date', filters.startDate);
-            }
-            if (filters.endDate) {
-              query = query.lte('date', filters.endDate);
-            }
-            break;
+          switch (filters.dateRange) {
+            case '7days':
+              startDate = new Date(today);
+              startDate.setDate(today.getDate() - 7);
+              query = query.gte('date', startDate.toISOString().split('T')[0]);
+              break;
+            case '30days':
+              startDate = new Date(today);
+              startDate.setDate(today.getDate() - 30);
+              query = query.gte('date', startDate.toISOString().split('T')[0]);
+              break;
+            case '90days':
+              startDate = new Date(today);
+              startDate.setDate(today.getDate() - 90);
+              query = query.gte('date', startDate.toISOString().split('T')[0]);
+              break;
+          }
         }
       } else {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        query = query.gte('date', thirtyDaysAgo.toISOString().split('T')[0]);
+        const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: 30 });
+        if (lastDates && lastDates.length > 0) {
+          query = query.in('date', lastDates);
+        }
       }
 
       if (filters?.crop_ids && filters.crop_ids.length > 0) {

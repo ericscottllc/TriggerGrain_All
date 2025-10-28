@@ -123,7 +123,7 @@ export interface ClientPricingEntry {
 }
 
 export interface ClientPricingFilters {
-  dateRange: '7days' | '30days' | '90days' | 'custom';
+  dateRange: '7days' | '30days' | '30dates' | '90days' | 'custom';
   startDate?: string;
   endDate?: string;
   crop_ids: string[];
