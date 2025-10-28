@@ -1,3 +1,9 @@
+// html2canvas PNG export with reliable cell centering
+// - Centers <td>/<th> content using flex in the cloned DOM
+// - Waits for fonts to load to avoid layout drift
+// - Converts <img> tags to data URLs to avoid CORS-tainting
+// - Leaves foreignObjectRendering off for broader compatibility
+
 import { EXPORT_CONFIG } from './constants';
 
 const convertImageToDataURL = async (img: HTMLImageElement): Promise<string> => {
@@ -43,21 +49,15 @@ const convertImageToDataURL = async (img: HTMLImageElement): Promise<string> => 
 
 const loadImages = async (element: HTMLElement): Promise<void> => {
   const images = element.querySelectorAll('img');
-  console.log(`Converting ${images.length} images to data URLs for export...`);
-
-  const imagePromises = Array.from(images).map(async (img, index) => {
+  const imagePromises = Array.from(images).map(async (img) => {
     try {
-      console.log(`Converting image ${index + 1}:`, img.src);
       const dataURL = await convertImageToDataURL(img);
       img.src = dataURL;
-      console.log(`Image ${index + 1} converted successfully`);
-    } catch (error) {
-      console.error(`Failed to convert image ${index + 1}:`, error);
+    } catch {
+      /* ignore individual failures */
     }
   });
-
   await Promise.all(imagePromises);
-  console.log('All images converted to data URLs');
 };
 
 const createCloneForExport = (element: HTMLElement): HTMLElement => {
@@ -72,195 +72,126 @@ const createCloneForExport = (element: HTMLElement): HTMLElement => {
   clone.style.backgroundColor = EXPORT_CONFIG.BACKGROUND_COLOR;
   clone.style.removeProperty('--scale-factor');
 
-  const allElements = clone.querySelectorAll('*');
-  allElements.forEach((el) => {
-    if (el instanceof HTMLElement) {
-      el.style.transform = 'none';
-    }
+  const all = clone.querySelectorAll<HTMLElement>('*');
+  all.forEach((el) => {
+    el.style.transform = 'none';
   });
 
   return clone;
 };
 
 const captureCanvas = async (element: HTMLElement): Promise<HTMLCanvasElement> => {
-  console.log('Capturing element with html2canvas...');
-  console.log('Element dimensions:', {
-    width: element.offsetWidth,
-    height: element.scrollHeight,
-    scrollHeight: element.scrollHeight
-  });
-
   const html2canvas = (await import('html2canvas')).default;
 
   const canvas = await html2canvas(element, {
     scale: EXPORT_CONFIG.SCALE_FACTOR,
-    useCORS: false,
-    allowTaint: true,
+    useCORS: true,           // try CORS first
+    allowTaint: false,       // safer default
     foreignObjectRendering: false,
     backgroundColor: EXPORT_CONFIG.BACKGROUND_COLOR,
     width: EXPORT_CONFIG.PAGE_WIDTH_PIXELS,
     height: element.scrollHeight,
     scrollX: 0,
     scrollY: 0,
-    logging: true,
+    logging: false,
     imageTimeout: 0,
     removeContainer: true,
     onclone: (clonedDoc) => {
-      console.log('Document cloned for rendering');
       const clonedElement = clonedDoc.getElementById('onepager-clone');
-      if (clonedElement) {
-        console.log('Clone element found in cloned document');
+      if (!clonedElement) return;
 
-        const allCells = clonedElement.querySelectorAll('td');
-        console.log(`Found ${allCells.length} table cells to fix`);
+      // Ensure consistent borders
+      clonedElement.querySelectorAll('table').forEach((t) => {
+        (t as HTMLElement).style.borderCollapse = 'separate';
+      });
 
-        allCells.forEach((cell: Element, index: number) => {
-          if (cell instanceof HTMLElement) {
-            // Get computed styles to see what html2canvas actually sees
-            const computedStyle = clonedDoc.defaultView?.getComputedStyle(cell);
-            const height = parseInt(cell.style.height || '0');
+      // Center all table headers/cells using flex (html2canvas supports flex alignment)
+      const cells = clonedElement.querySelectorAll('td, th');
+      cells.forEach((node) => {
+        const cell = node as HTMLElement;
+        const win = clonedDoc.defaultView;
+        const cs = win ? win.getComputedStyle(cell) : null;
 
-            if (index < 3) {
-              console.log(`Cell ${index} before fix:`, {
-                inlineHeight: cell.style.height,
-                inlinePadding: cell.style.padding,
-                inlineLineHeight: cell.style.lineHeight,
-                computedHeight: computedStyle?.height,
-                computedPaddingTop: computedStyle?.paddingTop,
-                computedLineHeight: computedStyle?.lineHeight,
-                computedFontSize: computedStyle?.fontSize,
-              });
-            }
+        // Preserve computed height to avoid collapse when switching display mode
+        const computedH = cs ? parseFloat(cs.height || '0') : 0;
 
-            // html2canvas doesn't support vertical-align for table cells
-            // We need to use padding to create the centering effect
+        cell.style.display = 'flex';
+        cell.style.alignItems = 'center';      // vertical centering
+        cell.style.justifyContent = 'center';  // horizontal centering
+        cell.style.textAlign = 'center';
+        cell.style.boxSizing = 'border-box';
 
-            if (height > 0) {
-              // Get the actual font size from computed styles
-              const computedFontSize = computedStyle ? parseFloat(computedStyle.fontSize) : 14;
+        // Preserve padding-x; vertical centering is handled by flex
+        const padL = cs ? cs.paddingLeft : '8px';
+        const padR = cs ? cs.paddingRight : '8px';
+        cell.style.paddingLeft = padL;
+        cell.style.paddingRight = padR;
 
-              // Calculate padding to center the text
-              const totalPadding = height - computedFontSize;
-              const topPadding = Math.floor(totalPadding / 2);
-              const bottomPadding = totalPadding - topPadding;
+        if (computedH > 0) {
+          cell.style.height = `${Math.ceil(computedH)}px`;
+        }
 
-              // Clear all conflicting properties
-              cell.style.verticalAlign = '';
-              cell.style.lineHeight = '1';
-              cell.style.boxSizing = 'border-box';
-
-              // Set padding with explicit values
-              const horizontalPadding = '8px';
-              cell.style.padding = `${topPadding}px ${horizontalPadding} ${bottomPadding}px ${horizontalPadding}`;
-
-              // Ensure height is maintained
-              cell.style.height = `${height}px`;
-              cell.style.display = 'table-cell';
-
-              if (index < 3) {
-                console.log(`Cell ${index} after fix:`, {
-                  height: cell.style.height,
-                  padding: cell.style.padding,
-                  lineHeight: cell.style.lineHeight,
-                  fontSize: computedFontSize,
-                  topPadding,
-                  bottomPadding
-                });
-              }
-            }
-          }
-        });
-
-        console.log('Applied vertical centering fixes to all table cells');
-      }
+        // Keep existing line-height if explicitly set
+        if (cs && cs.lineHeight && cs.lineHeight !== 'normal') {
+          cell.style.lineHeight = cs.lineHeight;
+        }
+      });
     }
-  });
-
-  console.log('Canvas created:', {
-    width: canvas.width,
-    height: canvas.height
   });
 
   return canvas;
 };
 
 const downloadCanvas = (canvas: HTMLCanvasElement, filename: string): void => {
-  console.log('Converting canvas to PNG...');
-
   const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Unable to get canvas context');
-  }
+  if (!ctx) throw new Error('Unable to get canvas context');
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   let hasContent = false;
-
   for (let i = 0; i < imageData.data.length; i += 4) {
     if (imageData.data[i] !== 255 || imageData.data[i + 1] !== 255 || imageData.data[i + 2] !== 255) {
       hasContent = true;
       break;
     }
   }
-
-  if (!hasContent) {
-    console.error('Canvas appears to be empty!');
-    throw new Error('Generated canvas is empty. The export may have failed to capture content.');
-  }
-
-  console.log('Canvas has content, generating download...');
+  if (!hasContent) throw new Error('Generated canvas is empty. The export may have failed to capture content.');
 
   const link = document.createElement('a');
   link.download = filename;
   link.href = canvas.toDataURL('image/png', EXPORT_CONFIG.IMAGE_QUALITY);
-
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-
-  console.log('Download initiated successfully');
 };
 
-export const exportToPNG = async (
-  elementId: string,
-  filename: string
-): Promise<void> => {
-  console.log('=== Starting PNG Export ===' );
-  console.log('Element ID:', elementId);
-  console.log('Filename:', filename);
-
+export const exportToPNG = async (elementId: string, filename: string): Promise<void> => {
   const element = document.getElementById(elementId);
-  if (!element) {
-    console.error('Element not found:', elementId);
-    throw new Error(`Export element not found: ${elementId}`);
-  }
+  if (!element) throw new Error(`Export element not found: ${elementId}`);
 
-  console.log('Original element found:', {
-    width: element.offsetWidth,
-    height: element.offsetHeight,
-    scrollHeight: element.scrollHeight
-  });
+  // Wait for fonts to be fully loaded to avoid reflow between measurement and render
+  if ((document as any).fonts?.ready) {
+    try {
+      await (document as any).fonts.ready;
+    } catch {
+      /* ignore */
+    }
+  }
 
   const clone = createCloneForExport(element);
   document.body.appendChild(clone);
-  console.log('Clone created and appended to body');
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // let styles apply
+    await new Promise((r) => setTimeout(r, 100));
 
     await loadImages(clone);
 
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // allow data URLs to settle
+    await new Promise((r) => setTimeout(r, 150));
 
     const canvas = await captureCanvas(clone);
     downloadCanvas(canvas, filename);
-
-    console.log('=== PNG Export Completed Successfully ===');
-  } catch (error) {
-    console.error('=== PNG Export Failed ===');
-    console.error('Error details:', error);
-    throw error;
   } finally {
     document.body.removeChild(clone);
-    console.log('Clone removed from DOM');
   }
 };
