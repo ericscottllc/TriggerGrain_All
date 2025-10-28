@@ -52,18 +52,14 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               backgroundColor: THEME_COLORS.PRIMARY_BORDER,
               borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
               borderRight: `2px solid ${THEME_COLORS.BLACK}`,
-              padding: '0'
+              padding: '0 8px',
+              height: '32px',
+              lineHeight: '32px',
+              textAlign: 'center',
+              verticalAlign: 'middle'
             }}
           >
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '32px',
-              padding: '4px 8px'
-            }}>
-              {region.region}
-            </div>
+            {region.region}
           </td>
           {availableMonths.map((month) => (
             <td
@@ -72,18 +68,14 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               style={{
                 backgroundColor: THEME_COLORS.PRIMARY_BORDER,
                 borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
-                padding: '0'
+                padding: '0 8px',
+                height: '32px',
+                lineHeight: '32px',
+                textAlign: 'center',
+                verticalAlign: 'middle'
               }}
             >
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '32px',
-                padding: '4px 8px'
-              }}>
-                {month}
-              </div>
+              {month}
             </td>
           ))}
         </tr>
@@ -100,35 +92,27 @@ export const RegionTable: React.FC<RegionTableProps> = ({
             <td
               className="font-medium text-black text-sm"
               style={{
-                padding: '0'
+                padding: '0 8px',
+                height: '28px',
+                lineHeight: '28px',
+                textAlign: 'left',
+                verticalAlign: 'middle'
               }}
             >
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                height: '28px',
-                padding: '4px 8px'
-              }}>
-                {entry.elevator}
-              </div>
+              {entry.elevator}
             </td>
             <td
               className="text-black text-sm"
               style={{
                 borderRight: `2px solid ${THEME_COLORS.BLACK}`,
-                padding: '0'
+                padding: '0 8px',
+                height: '28px',
+                lineHeight: '28px',
+                textAlign: 'left',
+                verticalAlign: 'middle'
               }}
             >
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                height: '28px',
-                padding: '4px 8px'
-              }}>
-                {entry.town}
-              </div>
+              {entry.town}
             </td>
 
             {availableMonths.map((month) => {
@@ -144,20 +128,16 @@ export const RegionTable: React.FC<RegionTableProps> = ({
                   className="text-black text-sm"
                   style={{
                     backgroundColor: isMax ? THEME_COLORS.PRIMARY_BORDER : undefined,
-                    padding: '0'
-                  }}
-                >
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
+                    padding: '0 8px',
                     height: '28px',
-                    padding: '4px 8px',
+                    lineHeight: '28px',
+                    textAlign: 'right',
+                    verticalAlign: 'middle',
                     fontWeight: isMax ? 700 : 500,
                     fontVariantNumeric: "tabular-nums"
-                  }}>
-                    {formatMoney(price)}
-                  </div>
+                  }}
+                >
+                  {formatMoney(price)}
                 </td>
               );
             })}
