@@ -54,12 +54,16 @@ export const OnePagerPage: React.FC = () => {
         setCropClasses(classes);
         setCropComparisons(comps);
 
-        if (classes.length > 0) setSelectedCropClass(classes[0].id);
         if (comps.length > 0) setSelectedCropComparison(comps[0].id);
 
-        const dates = await getAvailableDates();
-        setAvailableDates(dates);
-        if (dates.length > 0) setSelectedDate(dates[0]);
+        // Set crop class and load dates for that class
+        if (classes.length > 0) {
+          const firstClassId = classes[0].id;
+          setSelectedCropClass(firstClassId);
+          const dates = await getAvailableDates(firstClassId);
+          setAvailableDates(dates);
+          if (dates.length > 0) setSelectedDate(dates[0]);
+        }
       } catch (err) {
         console.error('Error initializing One Pager:', err);
       } finally {
@@ -68,9 +72,27 @@ export const OnePagerPage: React.FC = () => {
     })();
   }, []);
 
+  // Reload dates when crop class changes
+  useEffect(() => {
+    if (selectedCropClass && !initializing) {
+      (async () => {
+        const dates = await getAvailableDates(selectedCropClass);
+        setAvailableDates(dates);
+        // Reset selected date if it's not in the new list
+        if (dates.length > 0) {
+          if (!dates.includes(selectedDate)) {
+            setSelectedDate(dates[0]);
+          }
+        } else {
+          setSelectedDate("");
+        }
+      })();
+    }
+  }, [selectedCropClass]);
+
   const handleQuery = async () => {
     if (!selectedDate || !selectedCropClass || !selectedCropComparison) {
-      alert("Please select Crop Comparison, Crop Class, and Date before querying.");
+      notifyError("Please select Crop Comparison, Crop Class, and Date before querying.");
       return;
     }
     setHasQueried(true);

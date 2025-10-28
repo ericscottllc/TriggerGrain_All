@@ -192,21 +192,39 @@ export const useOnePagerData = () => {
     }
   };
 
-  const getAvailableDates = async (): Promise<string[]> => {
+  const getAvailableDates = async (classId?: string): Promise<string[]> => {
     try {
       setLoading(true);
       setError(null);
 
-      // Use the RPC function to get distinct dates
-      // Returns a flat array of date strings: ["2025-10-22", "2025-10-15", ...]
-      const { data, error: fetchError } = await supabase
-        .rpc('get_distinct_dates');
+      if (classId) {
+        // Get dates filtered by crop class
+        const { data, error: fetchError } = await supabase
+          .from('grain_entries')
+          .select('date')
+          .eq('class_id', classId)
+          .eq('is_active', true)
+          .order('date', { ascending: false });
 
-      if (fetchError) {
-        throw fetchError;
+        if (fetchError) {
+          throw fetchError;
+        }
+
+        // Extract unique dates
+        const uniqueDates = [...new Set(data?.map(entry => entry.date) || [])];
+        return uniqueDates;
+      } else {
+        // Use the RPC function to get all distinct dates
+        // Returns a flat array of date strings: ["2025-10-22", "2025-10-15", ...]
+        const { data, error: fetchError } = await supabase
+          .rpc('get_distinct_dates');
+
+        if (fetchError) {
+          throw fetchError;
+        }
+
+        return data || [];
       }
-
-      return data || [];
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch available dates';
       setError(errorMessage);
@@ -232,20 +250,32 @@ export const useOnePagerData = () => {
       setLoading(true);
       setError(null);
 
+      // Only get crop classes that have grain entries
       const { data, error: fetchError } = await supabase
         .from('crop_classes')
         .select(`
           *,
-          crop:master_crops(*)
+          crop:master_crops(*),
+          grain_entries!inner(id)
         `)
         .eq('is_active', true)
+        .eq('grain_entries.is_active', true)
         .order('name', { ascending: true });
 
       if (fetchError) {
         throw fetchError;
       }
 
-      return data || [];
+      // Remove duplicates and the grain_entries join field
+      const uniqueClasses = data?.reduce((acc: any[], curr: any) => {
+        if (!acc.find(c => c.id === curr.id)) {
+          const { grain_entries, ...classData } = curr;
+          acc.push(classData);
+        }
+        return acc;
+      }, []) || [];
+
+      return uniqueClasses;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch crop classes';
       setError(errorMessage);
