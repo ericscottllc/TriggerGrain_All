@@ -11,6 +11,7 @@ interface User {
   full_name: string | null;
   avatar_url: string | null;
   is_active: boolean;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -44,8 +45,10 @@ export const UserManagement: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // Fetch users with their roles
+
+      console.log('[UserManagement] Fetching users with roles...');
+
+      // Fetch users with their roles (removed is_active filter to see all users)
       const { data: usersData, error: usersError } = await supabase
         .from('public_users')
         .select(`
@@ -62,24 +65,32 @@ export const UserManagement: React.FC = () => {
             )
           )
         `)
-        .eq('is_active', true)
         .order('email', { ascending: true });
 
-      if (usersError) throw usersError;
+      if (usersError) {
+        console.error('[UserManagement] Error fetching users:', usersError);
+        throw usersError;
+      }
 
-      // Fetch all available roles
+      console.log('[UserManagement] Users data:', usersData);
+
+      // Fetch all available roles (removed is_active filter to see all roles)
       const { data: rolesData, error: rolesError } = await supabase
         .from('roles')
         .select('*')
-        .eq('is_active', true)
         .order('name', { ascending: true });
 
-      if (rolesError) throw rolesError;
+      if (rolesError) {
+        console.error('[UserManagement] Error fetching roles:', rolesError);
+        throw rolesError;
+      }
+
+      console.log('[UserManagement] Roles data:', rolesData);
 
       setUsers(usersData || []);
       setRoles(rolesData || []);
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('[UserManagement] Error in fetchData:', err);
       error('Failed to load data', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
@@ -194,8 +205,12 @@ export const UserManagement: React.FC = () => {
                       <Calendar className="w-3 h-3" />
                       <span>Joined {new Date(user.created_at).toLocaleDateString()}</span>
                       <span className="mx-1">•</span>
-                      <span className={user.is_active ? 'text-green-600' : 'text-red-600'}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                      <span className={
+                        user.status === 'active' ? 'text-green-600' :
+                        user.status === 'pending' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }>
+                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </span>
                     </div>
                   </div>
