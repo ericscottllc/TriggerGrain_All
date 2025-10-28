@@ -1,4 +1,5 @@
 import React from "react";
+import { formatDateUTC } from '../utils/dateUtils';
 
 interface OnePagerHeaderProps {
   selectedCropClassName: string;
@@ -11,15 +12,6 @@ export const OnePagerHeader: React.FC<OnePagerHeaderProps> = ({
   selectedCropComparisonName,
   selectedDate,
 }) => {
-  const formatDateUTC = (dateString: string) => {
-    const d = new Date(`${dateString}T00:00:00.000Z`);
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-  };
 
   // Remove trailing "comparison" if present so we can render it on its own line.
   const cropName = (selectedCropComparisonName || "")

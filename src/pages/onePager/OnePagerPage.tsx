@@ -1,14 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Calendar, TrendingUp, ChevronRight, ChevronDown, Settings, Download } from "lucide-react";
+import { Calendar, TrendingUp, ChevronDown, Settings, Download } from "lucide-react";
 import { useOnePagerData } from "./hooks/useOnePagerData";
-import { OnePagerControls, OnePagerHeader, RegionTable } from "./components";
+import { OnePagerHeader, RegionTable } from "./components";
 import { extractAvailableMonths, buildOnePagerData, getRegionMaxByMonth } from "./utils/dataProcessing";
+import { formatDateUTC } from "./utils/dateUtils";
+import { exportToPNG } from "./utils/exportUtils";
+import { applyScaleFactor } from "./utils/scalingUtils";
+import { EXPORT_CONFIG } from "./utils/constants";
 import {
   OnePagerConfig,
   OnePagerData as RegionBlock,
   MasterCropComparison,
   CropClass,
+  GrainEntry,
 } from "./types/onePagerTypes";
 
 export const OnePagerPage: React.FC = () => {
@@ -29,17 +34,21 @@ export const OnePagerPage: React.FC = () => {
   const [selectedCropClass, setSelectedCropClass] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedCropComparison, setSelectedCropComparison] = useState<string>("");
-  const [grainEntries, setGrainEntries] = useState<any[]>([]);
+  const [grainEntries, setGrainEntries] = useState<GrainEntry[]>([]);
   const [hasQueried, setHasQueried] = useState(false);
   const [controlsExpanded, setControlsExpanded] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
-  // Derived labels for the header title.
-  const selectedCropClassName =
-    cropClasses.find((c) => c.id === selectedCropClass)?.name || "";
-  const selectedCropComparisonName =
-    cropComparisons.find((c) => c.id === selectedCropComparison)?.name || "";
+  const selectedCropClassName = useMemo(
+    () => cropClasses.find((c) => c.id === selectedCropClass)?.name || "",
+    [cropClasses, selectedCropClass]
+  );
+
+  const selectedCropComparisonName = useMemo(
+    () => cropComparisons.find((c) => c.id === selectedCropComparison)?.name || "",
+    [cropComparisons, selectedCropComparison]
+  );
 
   useEffect(() => {
     (async () => {
@@ -90,9 +99,17 @@ export const OnePagerPage: React.FC = () => {
     }
   }, [selectedCropClass]);
 
-  const handleQuery = async () => {
+  const availableMonths = useMemo(() => {
+    return extractAvailableMonths(grainEntries);
+  }, [grainEntries]);
+
+  const onePagerData: RegionBlock[] = useMemo(() => {
+    return buildOnePagerData(configs, grainEntries, selectedCropComparison, selectedCropClass);
+  }, [configs, grainEntries, selectedCropComparison, selectedCropClass]);
+
+  const handleQuery = useCallback(async () => {
     if (!selectedDate || !selectedCropClass || !selectedCropComparison) {
-      notifyError("Please select Crop Comparison, Crop Class, and Date before querying.");
+      alert("Please select Crop Comparison, Crop Class, and Date before querying.");
       return;
     }
     setHasQueried(true);
@@ -102,109 +119,23 @@ export const OnePagerPage: React.FC = () => {
       selectedCropComparison
     );
     setGrainEntries(entries);
-  };
+  }, [selectedDate, selectedCropClass, selectedCropComparison, getGrainEntriesForQuery]);
 
-  const handleExportPNG = async () => {
+  const handleExportPNG = useCallback(async () => {
     if (onePagerData.length === 0) return;
-    
+
     setIsExporting(true);
-    
+
     try {
-      // Import html2canvas dynamically
-      const html2canvas = (await import('html2canvas')).default;
-      
-      const element = document.getElementById('onepager-content');
-      if (!element) {
-        throw new Error('One Pager content not found');
-      }
-      
-      // Create a clone of the element for capture to avoid affecting the display
-      const clone = element.cloneNode(true) as HTMLElement;
-      clone.id = 'onepager-clone';
-      
-      // Style the clone for proper capture
-      clone.style.position = 'absolute';
-      clone.style.left = '-9999px';
-      clone.style.top = '0';
-      clone.style.transform = 'none';
-      clone.style.width = '816px'; // 8.5 inches at 96 DPI
-      clone.style.backgroundColor = '#ffffff';
-      
-      // Append clone to body
-      document.body.appendChild(clone);
-      
-      // Wait for images to load
-      const images = clone.querySelectorAll('img');
-      await Promise.all(Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          // Force reload if src is relative
-          if (img.src.startsWith('/')) {
-            img.src = window.location.origin + img.src;
-          }
-        });
-      }));
-      
-      // Capture the clone at high resolution
-      const canvas = await html2canvas(clone, {
-        scale: 3, // Higher scale for better quality
-        useCORS: true,
-        allowTaint: true,
-        foreignObjectRendering: true,
-        backgroundColor: '#ffffff',
-        width: 816,
-        height: clone.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true
-      });
-      
-      // Remove the clone
-      document.body.removeChild(clone);
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.download = `${selectedCropComparisonName}_${selectedCropClassName}_${selectedDate}.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
-      
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      const filename = `${selectedCropComparisonName}_${selectedCropClassName}_${selectedDate}.png`;
+      await exportToPNG('onepager-content', filename);
     } catch (error) {
       console.error('Error exporting PNG:', error);
       alert('Failed to export PNG. Please try again.');
     } finally {
       setIsExporting(false);
     }
-  };
-
-  // Extract available months from the actual data
-  const availableMonths = useMemo(() => {
-    return extractAvailableMonths(grainEntries);
-  }, [grainEntries]);
-
-  /**
-   * Build the page data grouped by region, preserving config order.
-   */
-  const onePagerData: RegionBlock[] = useMemo(() => {
-    return buildOnePagerData(configs, grainEntries, selectedCropComparison, selectedCropClass);
-  }, [configs, grainEntries, selectedCropComparison, selectedCropClass]);
-
-  const formatDateUTC = (dateString: string) => {
-    const d = new Date(`${dateString}T00:00:00.000Z`);
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-  };
+  }, [onePagerData.length, selectedCropComparisonName, selectedCropClassName, selectedDate]);
 
   if (error) {
     return (
@@ -366,36 +297,18 @@ export const OnePagerPage: React.FC = () => {
             transition={{ duration: 0.25 }}
             className="mx-auto h-full flex items-center justify-center"
           >
-            <div 
+            <div
               className="bg-white transform-gpu origin-center"
               id="onepager-content"
-              style={{ 
-                border: "6px solid #acdfeb",
-                outline: "2px solid black",
-                width: "8.5in",
+              style={{
+                border: `${EXPORT_CONFIG.BORDER_WIDTH}px solid ${EXPORT_CONFIG.BORDER_COLOR}`,
+                outline: `${EXPORT_CONFIG.OUTLINE_WIDTH}px solid ${EXPORT_CONFIG.OUTLINE_COLOR}`,
+                width: `${EXPORT_CONFIG.PAGE_WIDTH_INCHES}in`,
                 transform: "scale(var(--scale-factor))",
                 transformOrigin: "center center"
               }}
-              ref={(el) => {
-                if (el) {
-                  // Calculate scale to fit container
-                  const container = el.parentElement;
-                  if (container) {
-                    const containerWidth = container.clientWidth - 48; // Account for padding  
-                    const containerHeight = container.clientHeight - 48;
-                    const elementWidth = 816; // 8.5in in pixels (96 DPI)
-                    const elementHeight = el.scrollHeight;
-                    
-                    const scaleX = containerWidth / elementWidth;
-                    const scaleY = containerHeight / elementHeight;
-                    const scale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 100%
-                    
-                    el.style.setProperty('--scale-factor', scale.toString());
-                  }
-                }
-              }}
+              ref={applyScaleFactor}
             >
-              {/* Professional report layout */}
               <div>
                 {/* Header */}
                 <OnePagerHeader
@@ -422,7 +335,6 @@ export const OnePagerPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Print styles */}
             <style>{`
               @page { size: Letter portrait; margin: 0.25in; }
               @media print {

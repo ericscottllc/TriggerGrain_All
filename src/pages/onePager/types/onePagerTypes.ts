@@ -77,3 +77,22 @@ export interface OnePagerData {
     prices: { [month: string]: number | null };
   }[];
 }
+
+export interface MasterCropComparison {
+  id: string;
+  name: string;
+  code: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CropClass {
+  id: string;
+  name: string;
+  crop_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  crop?: MasterCrop;
+}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { OnePagerData } from '../types/onePagerTypes';
+import { TABLE_CONFIG, THEME_COLORS } from '../utils/constants';
 
 interface RegionTableProps {
   region: OnePagerData;
@@ -17,20 +18,13 @@ export const RegionTable: React.FC<RegionTableProps> = ({
     return `$${n.toFixed(2)}`;
   };
 
-  // Calculate dynamic column widths based on available months
-  const baseWidth = 300; // Fixed width for elevator + town columns (150px each)
-  const monthColumnWidth = 100; // Width per month column
-  const totalMonthWidth = availableMonths.length * monthColumnWidth;
-  const totalTableWidth = baseWidth + totalMonthWidth;
-  
-  // Ensure table doesn't exceed container width (8.5in = ~816px with margins)
-  const maxTableWidth = 750; // Leave room for margins
-  const finalTableWidth = Math.min(totalTableWidth, maxTableWidth);
-  
-  // Adjust month column width if needed
-  const adjustedMonthWidth = totalTableWidth > maxTableWidth 
-    ? Math.floor((maxTableWidth - baseWidth) / availableMonths.length)
-    : monthColumnWidth;
+  const totalMonthWidth = availableMonths.length * TABLE_CONFIG.MONTH_COLUMN_WIDTH;
+  const totalTableWidth = TABLE_CONFIG.BASE_WIDTH + totalMonthWidth;
+  const finalTableWidth = Math.min(totalTableWidth, TABLE_CONFIG.MAX_TABLE_WIDTH);
+
+  const adjustedMonthWidth = totalTableWidth > TABLE_CONFIG.MAX_TABLE_WIDTH
+    ? Math.floor((TABLE_CONFIG.MAX_TABLE_WIDTH - TABLE_CONFIG.BASE_WIDTH) / availableMonths.length)
+    : TABLE_CONFIG.MONTH_COLUMN_WIDTH;
 
   return (
     <div className="mx-3 mb-3">
@@ -42,8 +36,8 @@ export const RegionTable: React.FC<RegionTableProps> = ({
         }}
       >
         <colgroup>
-          <col style={{ width: '150px' }} />
-          <col style={{ width: '150px' }} />
+          <col style={{ width: `${TABLE_CONFIG.ELEVATOR_COLUMN_WIDTH}px` }} />
+          <col style={{ width: `${TABLE_CONFIG.TOWN_COLUMN_WIDTH}px` }} />
           {availableMonths.map((month) => (
             <col key={month} style={{ width: `${adjustedMonthWidth}px` }} />
           ))}
@@ -55,9 +49,9 @@ export const RegionTable: React.FC<RegionTableProps> = ({
             colSpan={2}
             className="text-black font-bold text-center px-2 py-1 text-sm"
             style={{
-              backgroundColor: "#acdfeb",
-              borderBottom: "2px solid black",
-              borderRight: "2px solid black",
+              backgroundColor: THEME_COLORS.PRIMARY_BORDER,
+              borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
+              borderRight: `2px solid ${THEME_COLORS.BLACK}`,
             }}
           >
             {region.region}
@@ -67,8 +61,8 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               key={month}
               className="font-bold text-center px-2 py-1 text-black text-sm"
               style={{
-                backgroundColor: "#acdfeb",
-                borderBottom: "2px solid black",
+                backgroundColor: THEME_COLORS.PRIMARY_BORDER,
+                borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
               }}
             >
               {month}
@@ -80,7 +74,7 @@ export const RegionTable: React.FC<RegionTableProps> = ({
         {region.entries.map((entry, rIdx) => (
           <tr
             key={`${entry.elevator}-${entry.town}-${rIdx}`}
-            style={{ backgroundColor: rIdx % 2 === 0 ? "#f9f9f9" : "white" }}
+            style={{ backgroundColor: rIdx % 2 === 0 ? THEME_COLORS.ALTERNATE_ROW : THEME_COLORS.WHITE }}
           >
             <td
               className="px-2 py-1 font-medium text-black text-sm"
@@ -93,8 +87,8 @@ export const RegionTable: React.FC<RegionTableProps> = ({
             </td>
             <td
               className="px-2 py-1 text-black text-sm"
-              style={{ 
-                borderRight: "2px solid black",
+              style={{
+                borderRight: `2px solid ${THEME_COLORS.BLACK}`,
                 verticalAlign: 'middle',
                 textAlign: 'left'
               }}
@@ -115,7 +109,7 @@ export const RegionTable: React.FC<RegionTableProps> = ({
                   className="px-2 py-1 text-right text-black text-sm"
                   style={{
                     fontWeight: isMax ? 700 : 500,
-                    backgroundColor: isMax ? "#acdfeb" : undefined,
+                    backgroundColor: isMax ? THEME_COLORS.PRIMARY_BORDER : undefined,
                     fontVariantNumeric: "tabular-nums",
                     verticalAlign: 'middle',
                     textAlign: 'right'

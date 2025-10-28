@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { MasterCrop, GrainEntry, OnePagerConfig } from '../types/onePagerTypes';
+import { GrainEntry, OnePagerConfig, CropClass, MasterCropComparison } from '../types/onePagerTypes';
 
 export const useOnePagerData = () => {
   const [loading, setLoading] = useState(false);
@@ -11,57 +11,48 @@ export const useOnePagerData = () => {
       setLoading(true);
       setError(null);
 
-      // Query the new normalized structure
-      // Get region -> crop comparison associations
-      const { data: regionComparisons, error: rcError } = await supabase
-        .from('region_crop_comparisons')
-        .select(`
-          region_id,
-          crop_comparison_id,
-          region:master_regions(*),
-          crop_comparison:master_crop_comparison(*)
-        `)
-        .eq('is_active', true);
+      const [regionComparisons, townRegions, elevatorTowns] = await Promise.all([
+        supabase
+          .from('region_crop_comparisons')
+          .select(`
+            region_id,
+            crop_comparison_id,
+            region:master_regions(*),
+            crop_comparison:master_crop_comparison(*)
+          `)
+          .eq('is_active', true),
+        supabase
+          .from('town_regions')
+          .select(`
+            town_id,
+            region_id,
+            town:master_towns(*),
+            region:master_regions(*)
+          `)
+          .eq('is_active', true),
+        supabase
+          .from('elevator_towns')
+          .select(`
+            elevator_id,
+            town_id,
+            elevator:master_elevators(*),
+            town:master_towns(*)
+          `)
+          .eq('is_active', true)
+      ]);
 
-      if (rcError) throw rcError;
+      if (regionComparisons.error) throw regionComparisons.error;
+      if (townRegions.error) throw townRegions.error;
+      if (elevatorTowns.error) throw elevatorTowns.error;
 
-      // Get town -> region associations
-      const { data: townRegions, error: trError } = await supabase
-        .from('town_regions')
-        .select(`
-          town_id,
-          region_id,
-          town:master_towns(*),
-          region:master_regions(*)
-        `)
-        .eq('is_active', true);
-
-      if (trError) throw trError;
-
-      // Get elevator -> town associations
-      const { data: elevatorTowns, error: etError } = await supabase
-        .from('elevator_towns')
-        .select(`
-          elevator_id,
-          town_id,
-          elevator:master_elevators(*),
-          town:master_towns(*)
-        `)
-        .eq('is_active', true);
-
-      if (etError) throw etError;
-
-      // Build the config data by joining the relationships
       const configs: OnePagerConfig[] = [];
-      
-      for (const rc of regionComparisons || []) {
-        // Find towns in this region
-        const townsInRegion = townRegions?.filter(tr => tr.region_id === rc.region_id) || [];
-        
+
+      for (const rc of regionComparisons.data || []) {
+        const townsInRegion = townRegions.data?.filter(tr => tr.region_id === rc.region_id) || [];
+
         for (const tr of townsInRegion) {
-          // Find elevators in this town
-          const elevatorsInTown = elevatorTowns?.filter(et => et.town_id === tr.town_id) || [];
-          
+          const elevatorsInTown = elevatorTowns.data?.filter(et => et.town_id === tr.town_id) || [];
+
           for (const et of elevatorsInTown) {
             configs.push({
               id: `${rc.region_id}-${et.elevator_id}-${tr.town_id}-${rc.crop_comparison_id}`,
@@ -73,7 +64,7 @@ export const useOnePagerData = () => {
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               crop_comparison_id: rc.crop_comparison_id,
-              class_id: null, // Will be set by user selection
+              class_id: null,
               region: rc.region,
               elevator: et.elevator,
               town: tr.town
@@ -93,26 +84,61 @@ export const useOnePagerData = () => {
     }
   };
 
-  const getMasterCrops = async (): Promise<MasterCrop[]> => {
+  const getCropClasses = async (): Promise<CropClass[]> => {
     try {
       setLoading(true);
       setError(null);
 
       const { data, error: fetchError } = await supabase
-        .from('master_crops')
+        .from('crop_classes')
+        .select(`
+          *,
+          crop:master_crops(*),
+          grain_entries!inner(id)
+        `)
+        .eq('is_active', true)
+        .eq('grain_entries.is_active', true)
+        .order('name', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      const uniqueClasses = data?.reduce((acc: CropClass[], curr: any) => {
+        if (!acc.find(c => c.id === curr.id)) {
+          const { grain_entries, ...classData } = curr;
+          acc.push(classData);
+        }
+        return acc;
+      }, []) || [];
+
+      return uniqueClasses;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch crop classes';
+      setError(errorMessage);
+      console.error('Error fetching crop classes:', err);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getMasterCropComparisons = async (): Promise<MasterCropComparison[]> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('master_crop_comparison')
         .select('*')
         .eq('is_active', true)
         .order('name', { ascending: true });
 
-      if (fetchError) {
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
       return data || [];
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch master crops';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch crop comparisons';
       setError(errorMessage);
-      console.error('Error fetching master crops:', err);
+      console.error('Error fetching crop comparisons:', err);
       return [];
     } finally {
       setLoading(false);
@@ -120,21 +146,17 @@ export const useOnePagerData = () => {
   };
 
   const getGrainEntriesForQuery = async (
-    date: string, 
-    classId: string, 
+    date: string,
+    classId: string,
     cropComparisonId: string
   ): Promise<GrainEntry[]> => {
     try {
       setLoading(true);
       setError(null);
 
-      // Get regions associated with the crop comparison
       const { data: regionComparisons, error: rcError } = await supabase
         .from('region_crop_comparisons')
-        .select(`
-          region_id,
-          region:master_regions(*)
-        `)
+        .select('region_id')
         .eq('crop_comparison_id', cropComparisonId)
         .eq('is_active', true);
 
@@ -143,10 +165,9 @@ export const useOnePagerData = () => {
 
       const regionIds = regionComparisons.map(rc => rc.region_id);
 
-      // Get towns in these regions
       const { data: townRegions, error: trError } = await supabase
         .from('town_regions')
-        .select('town_id, region_id')
+        .select('town_id')
         .in('region_id', regionIds)
         .eq('is_active', true);
 
@@ -155,10 +176,9 @@ export const useOnePagerData = () => {
 
       const townIds = [...new Set(townRegions.map(tr => tr.town_id))];
 
-      // Get elevators in these towns
       const { data: elevatorTowns, error: etError } = await supabase
         .from('elevator_towns')
-        .select('elevator_id, town_id')
+        .select('elevator_id')
         .in('town_id', townIds)
         .eq('is_active', true);
 
@@ -167,7 +187,6 @@ export const useOnePagerData = () => {
 
       const elevatorIds = [...new Set(elevatorTowns.map(et => et.elevator_id))];
 
-      // Query grain entries with the class_id filter
       const { data, error: fetchError } = await supabase
         .from('grain_entries')
         .select('*')
@@ -177,9 +196,7 @@ export const useOnePagerData = () => {
         .in('town_id', townIds)
         .eq('is_active', true);
 
-      if (fetchError) {
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
       return data || [];
     } catch (err) {
@@ -198,7 +215,6 @@ export const useOnePagerData = () => {
       setError(null);
 
       if (classId) {
-        // Get dates filtered by crop class
         const { data, error: fetchError } = await supabase
           .from('grain_entries')
           .select('date')
@@ -206,22 +222,15 @@ export const useOnePagerData = () => {
           .eq('is_active', true)
           .order('date', { ascending: false });
 
-        if (fetchError) {
-          throw fetchError;
-        }
+        if (fetchError) throw fetchError;
 
-        // Extract unique dates
         const uniqueDates = [...new Set(data?.map(entry => entry.date) || [])];
         return uniqueDates;
       } else {
-        // Use the RPC function to get all distinct dates
-        // Returns a flat array of date strings: ["2025-10-22", "2025-10-15", ...]
         const { data, error: fetchError } = await supabase
           .rpc('get_distinct_dates');
 
-        if (fetchError) {
-          throw fetchError;
-        }
+        if (fetchError) throw fetchError;
 
         return data || [];
       }
@@ -244,71 +253,4 @@ export const useOnePagerData = () => {
     getGrainEntriesForQuery,
     getAvailableDates
   };
-
-  async function getCropClasses() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Only get crop classes that have grain entries
-      const { data, error: fetchError } = await supabase
-        .from('crop_classes')
-        .select(`
-          *,
-          crop:master_crops(*),
-          grain_entries!inner(id)
-        `)
-        .eq('is_active', true)
-        .eq('grain_entries.is_active', true)
-        .order('name', { ascending: true });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      // Remove duplicates and the grain_entries join field
-      const uniqueClasses = data?.reduce((acc: any[], curr: any) => {
-        if (!acc.find(c => c.id === curr.id)) {
-          const { grain_entries, ...classData } = curr;
-          acc.push(classData);
-        }
-        return acc;
-      }, []) || [];
-
-      return uniqueClasses;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch crop classes';
-      setError(errorMessage);
-      console.error('Error fetching crop classes:', err);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function getMasterCropComparisons() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
-        .from('master_crop_comparison')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      return data || [];
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch crop comparisons';
-      setError(errorMessage);
-      console.error('Error fetching crop comparisons:', err);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }
 };
