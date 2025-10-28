@@ -52,12 +52,18 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               backgroundColor: THEME_COLORS.PRIMARY_BORDER,
               borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
               borderRight: `2px solid ${THEME_COLORS.BLACK}`,
-              textAlign: 'center',
-              verticalAlign: 'middle',
-              padding: '4px 8px'
+              padding: '0'
             }}
           >
-            {region.region}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '32px',
+              padding: '4px 8px'
+            }}>
+              {region.region}
+            </div>
           </td>
           {availableMonths.map((month) => (
             <td
@@ -66,12 +72,18 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               style={{
                 backgroundColor: THEME_COLORS.PRIMARY_BORDER,
                 borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
-                textAlign: 'center',
-                verticalAlign: 'middle',
-                padding: '4px 8px'
+                padding: '0'
               }}
             >
-              {month}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '32px',
+                padding: '4px 8px'
+              }}>
+                {month}
+              </div>
             </td>
           ))}
         </tr>
@@ -88,23 +100,35 @@ export const RegionTable: React.FC<RegionTableProps> = ({
             <td
               className="font-medium text-black text-sm"
               style={{
-                verticalAlign: 'middle',
-                textAlign: 'left',
-                padding: '4px 8px'
+                padding: '0'
               }}
             >
-              {entry.elevator}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                height: '28px',
+                padding: '4px 8px'
+              }}>
+                {entry.elevator}
+              </div>
             </td>
             <td
               className="text-black text-sm"
               style={{
                 borderRight: `2px solid ${THEME_COLORS.BLACK}`,
-                verticalAlign: 'middle',
-                textAlign: 'left',
-                padding: '4px 8px'
+                padding: '0'
               }}
             >
-              {entry.town}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                height: '28px',
+                padding: '4px 8px'
+              }}>
+                {entry.town}
+              </div>
             </td>
 
             {availableMonths.map((month) => {
@@ -119,15 +143,21 @@ export const RegionTable: React.FC<RegionTableProps> = ({
                   key={month}
                   className="text-black text-sm"
                   style={{
-                    fontWeight: isMax ? 700 : 500,
                     backgroundColor: isMax ? THEME_COLORS.PRIMARY_BORDER : undefined,
-                    fontVariantNumeric: "tabular-nums",
-                    verticalAlign: 'middle',
-                    textAlign: 'right',
-                    padding: '4px 8px'
+                    padding: '0'
                   }}
                 >
-                  {formatMoney(price)}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    height: '28px',
+                    padding: '4px 8px',
+                    fontWeight: isMax ? 700 : 500,
+                    fontVariantNumeric: "tabular-nums"
+                  }}>
+                    {formatMoney(price)}
+                  </div>
                 </td>
               );
             })}
