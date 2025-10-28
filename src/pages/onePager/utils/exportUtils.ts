@@ -146,7 +146,7 @@ const captureCanvas = async (element: HTMLElement): Promise<HTMLCanvasElement> =
 
               // Clear all conflicting properties
               cell.style.verticalAlign = '';
-              cell.style.lineHeight = '1.5';
+              cell.style.lineHeight = '1';
               cell.style.boxSizing = 'border-box';
 
               // Set padding with explicit values
