@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
+import { rpcWithRetry } from '../../../utils/supabaseUtils';
 import type { GrainEntry, AnalyticsFilters, MasterCrop, CropClass, MasterElevator, MasterTown, MasterRegion } from '../types/analyticsTypes';
 
 export const useAnalyticsData = () => {
@@ -56,12 +57,18 @@ export const useAnalyticsData = () => {
 
       if (filters?.dateRange) {
         const numDates = parseInt(filters.dateRange.replace('dates', ''));
-        const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: numDates });
+        const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: numDates });
+        if (datesError) {
+          console.error('[useAnalyticsData] Error fetching last dates:', datesError);
+        }
         if (lastDates && lastDates.length > 0) {
           query = query.in('date', lastDates);
         }
       } else {
-        const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: 30 });
+        const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: 30 });
+        if (datesError) {
+          console.error('[useAnalyticsData] Error fetching last dates (default):', datesError);
+        }
         if (lastDates && lastDates.length > 0) {
           query = query.in('date', lastDates);
         }

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
+import { rpcWithRetry } from '../../../utils/supabaseUtils';
 import type { ClientPricingEntry, ClientPricingFilters } from '../types/clientTypes';
 
 export const useClientPricing = (clientId: string | undefined) => {
@@ -53,7 +54,10 @@ export const useClientPricing = (clientId: string | undefined) => {
 
       if (filters?.dateRange) {
         if (filters.dateRange === '30dates') {
-          const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: 30 });
+          const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: 30 });
+          if (datesError) {
+            console.error('[useClientPricing] Error fetching last dates:', datesError);
+          }
           if (lastDates && lastDates.length > 0) {
             query = query.in('date', lastDates);
           }
@@ -87,7 +91,10 @@ export const useClientPricing = (clientId: string | undefined) => {
           }
         }
       } else {
-        const { data: lastDates } = await supabase.rpc('get_last_n_dates', { n: 30 });
+        const { data: lastDates, error: datesError } = await rpcWithRetry('get_last_n_dates', { n: 30 });
+        if (datesError) {
+          console.error('[useClientPricing] Error fetching last dates (default):', datesError);
+        }
         if (lastDates && lastDates.length > 0) {
           query = query.in('date', lastDates);
         }

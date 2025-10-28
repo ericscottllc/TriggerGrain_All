@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -36,10 +36,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isInitializedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const fetchingProfileRef = useRef(false);
 
-  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  const fetchUserProfile = useCallback(async (userId: string, retryCount = 0): Promise<UserProfile | null> => {
     console.log('[AuthContext] fetchUserProfile called for:', userId);
+
+    if (fetchingProfileRef.current) {
+      console.log('[AuthContext] Profile fetch already in progress, skipping');
+      return null;
+    }
+
+    fetchingProfileRef.current = true;
+
     try {
       const { data, error } = await supabase
         .rpc('get_user_info', { p_user_id: userId })
@@ -47,6 +57,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('[AuthContext] Error fetching user profile:', error);
+
+        if (retryCount < 2) {
+          console.log(`[AuthContext] Retrying profile fetch (attempt ${retryCount + 2}/3)...`);
+          fetchingProfileRef.current = false;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return fetchUserProfile(userId, retryCount + 1);
+        }
+
         return null;
       }
 
@@ -67,37 +85,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return null;
     } catch (error) {
       console.error('[AuthContext] Exception fetching user profile:', error);
+
+      if (retryCount < 2) {
+        console.log(`[AuthContext] Retrying after exception (attempt ${retryCount + 2}/3)...`);
+        fetchingProfileRef.current = false;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchUserProfile(userId, retryCount + 1);
+      }
+
       return null;
+    } finally {
+      fetchingProfileRef.current = false;
     }
-  };
+  }, []);
 
-  const refreshUserProfile = async () => {
+  const refreshUserProfile = useCallback(async () => {
     if (user) {
+      console.log('[AuthContext] Manually refreshing user profile');
       const profile = await fetchUserProfile(user.id);
-      setUserProfile(profile);
+      if (mountedRef.current) {
+        setUserProfile(profile);
+      }
     }
-  };
+  }, [user, fetchUserProfile]);
 
-  const handleAuthStateChange = async (session: any) => {
+  const handleAuthStateChange = useCallback(async (session: any) => {
     console.log('[AuthContext] handleAuthStateChange called, session:', !!session);
 
     if (session?.user) {
       console.log('[AuthContext] Session has user:', session.user.email);
-      setUser(session.user);
-      const profile = await fetchUserProfile(session.user.id);
-      setUserProfile(profile);
+      if (mountedRef.current) {
+        setUser(session.user);
+        const profile = await fetchUserProfile(session.user.id);
+        if (mountedRef.current) {
+          setUserProfile(profile);
+        }
+      }
     } else {
       console.log('[AuthContext] No session user, clearing state');
-      setUser(null);
-      setUserProfile(null);
+      if (mountedRef.current) {
+        setUser(null);
+        setUserProfile(null);
+      }
     }
 
-    setLoading(false);
+    if (mountedRef.current) {
+      setLoading(false);
+    }
     console.log('[AuthContext] Auth state processing complete, loading set to false');
-  };
+  }, [fetchUserProfile]);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     console.log('[AuthContext] useEffect running, setting up auth');
 
     const initializeAuth = async () => {
@@ -111,21 +150,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         console.log('[AuthContext] Initial session check:', session ? `User: ${session.user.email}` : 'No session');
 
-        if (!mounted) {
+        if (!mountedRef.current) {
           console.log('[AuthContext] Component unmounted, aborting');
           return;
         }
 
         await handleAuthStateChange(session);
-        setIsInitialized(true);
+        isInitializedRef.current = true;
         console.log('[AuthContext] Initialization complete');
       } catch (error) {
         console.error('[AuthContext] Error initializing auth:', error);
-        if (mounted) {
+        if (mountedRef.current) {
           setUser(null);
           setUserProfile(null);
           setLoading(false);
-          setIsInitialized(true);
+          isInitializedRef.current = true;
         }
       }
     };
@@ -136,12 +175,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (event, session) => {
         console.log('[AuthContext] onAuthStateChange fired:', event);
 
-        if (!mounted) {
+        if (!mountedRef.current) {
           console.log('[AuthContext] Component unmounted, ignoring auth change');
           return;
         }
 
-        if (!isInitialized) {
+        if (!isInitializedRef.current) {
           console.log('[AuthContext] Not yet initialized, skipping auth state change handler');
           return;
         }
@@ -152,10 +191,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       console.log('[AuthContext] Cleaning up auth listener');
-      mounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [isInitialized]);
+  }, [handleAuthStateChange]);
 
   const signInWithEmail = async (email: string, password: string) => {
     console.log('[AuthContext] signInWithEmail called for:', email);
