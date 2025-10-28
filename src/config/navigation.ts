@@ -29,13 +29,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     color: 'tg-grey'
   },
   {
-    id: 'blog-posts',
-    title: 'Blog Posts',
-    icon_name: 'BookOpen',
-    path: '/blog-posts',
-    color: 'tg-primary'
-  },
-  {
     id: 'one-pager',
     title: 'One Pager',
     icon_name: 'FileText',
@@ -70,4 +63,11 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/clients',
     color: 'tg-primary'
   }
+  {
+    id: 'blog-posts',
+    title: 'Blog Posts',
+    icon_name: 'BookOpen',
+    path: '/blog-posts',
+    color: 'tg-primary'
+  },  
 ];
