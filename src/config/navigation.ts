@@ -63,11 +63,4 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/clients',
     color: 'tg-primary'
   }
-  {
-    id: 'blog-posts',
-    title: 'Blog Posts',
-    icon_name: 'BookOpen',
-    path: '/blog-posts',
-    color: 'tg-primary'
-  },  
 ];
