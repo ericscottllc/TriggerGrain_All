@@ -33,6 +33,7 @@ export const OnePagerPage: React.FC = () => {
   const [hasQueried, setHasQueried] = useState(false);
   const [controlsExpanded, setControlsExpanded] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   // Derived labels for the header title.
   const selectedCropClassName =
@@ -42,21 +43,28 @@ export const OnePagerPage: React.FC = () => {
 
   useEffect(() => {
     (async () => {
-      const [cfgs, classes, comps] = await Promise.all([
-        getOnePagerConfigs(),
-        getCropClasses(),
-        getMasterCropComparisons(),
-      ]);
-      setConfigs(cfgs);
-      setCropClasses(classes);
-      setCropComparisons(comps);
+      try {
+        setInitializing(true);
+        const [cfgs, classes, comps] = await Promise.all([
+          getOnePagerConfigs(),
+          getCropClasses(),
+          getMasterCropComparisons(),
+        ]);
+        setConfigs(cfgs);
+        setCropClasses(classes);
+        setCropComparisons(comps);
 
-      if (classes.length > 0) setSelectedCropClass(classes[0].id);
-      if (comps.length > 0) setSelectedCropComparison(comps[0].id);
+        if (classes.length > 0) setSelectedCropClass(classes[0].id);
+        if (comps.length > 0) setSelectedCropComparison(comps[0].id);
 
-      const dates = await getAvailableDates();
-      setAvailableDates(dates);
-      if (dates.length > 0) setSelectedDate(dates[0]);
+        const dates = await getAvailableDates();
+        setAvailableDates(dates);
+        if (dates.length > 0) setSelectedDate(dates[0]);
+      } catch (err) {
+        console.error('Error initializing One Pager:', err);
+      } finally {
+        setInitializing(false);
+      }
     })();
   }, []);
 
@@ -420,20 +428,32 @@ export const OnePagerPage: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Loader */}
-        {loading && (
+        {/* Initializing Loader */}
+        {initializing && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="bg-white rounded-xl border border-gray-200 p-8 text-center shadow-sm"
           >
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-tg-green mx-auto mb-4"></div>
-            <p className="text-gray-500">Loading data...</p>
+            <p className="text-gray-500">Loading configuration...</p>
+          </motion.div>
+        )}
+
+        {/* Query Loader */}
+        {!initializing && loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-white rounded-xl border border-gray-200 p-8 text-center shadow-sm"
+          >
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-tg-green mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading grain entries...</p>
           </motion.div>
         )}
 
         {/* Initial State */}
-        {!hasQueried && !loading && (
+        {!initializing && !hasQueried && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

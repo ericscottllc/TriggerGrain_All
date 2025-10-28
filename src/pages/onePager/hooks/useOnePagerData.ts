@@ -198,6 +198,7 @@ export const useOnePagerData = () => {
       setError(null);
 
       // Use the RPC function to get distinct dates
+      // Returns a flat array of date strings: ["2025-10-22", "2025-10-15", ...]
       const { data, error: fetchError } = await supabase
         .rpc('get_distinct_dates');
 
@@ -205,11 +206,7 @@ export const useOnePagerData = () => {
         throw fetchError;
       }
 
-      // Transform the data from array of objects to array of date strings
-      // RPC returns [{date: "2025-10-22"}, {date: "2025-10-15"}, ...]
-      const dates = (data || []).map((item: any) => item.date || item);
-
-      return dates;
+      return data || [];
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch available dates';
       setError(errorMessage);
