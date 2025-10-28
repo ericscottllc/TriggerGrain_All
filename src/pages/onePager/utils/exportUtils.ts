@@ -112,26 +112,66 @@ const captureCanvas = async (element: HTMLElement): Promise<HTMLCanvasElement> =
         console.log('Clone element found in cloned document');
 
         const allCells = clonedElement.querySelectorAll('td');
-        allCells.forEach((cell: Element) => {
+        console.log(`Found ${allCells.length} table cells to fix`);
+
+        allCells.forEach((cell: Element, index: number) => {
           if (cell instanceof HTMLElement) {
+            // Get computed styles to see what html2canvas actually sees
+            const computedStyle = clonedDoc.defaultView?.getComputedStyle(cell);
             const height = parseInt(cell.style.height || '0');
-            const lineHeight = parseInt(cell.style.lineHeight || '0');
 
-            if (height > 0 && lineHeight > 0 && height === lineHeight) {
-              const fontSize = 14;
-              const topPadding = Math.floor((height - fontSize) / 2);
-              const bottomPadding = height - fontSize - topPadding;
+            if (index < 3) {
+              console.log(`Cell ${index} before fix:`, {
+                inlineHeight: cell.style.height,
+                inlinePadding: cell.style.padding,
+                inlineLineHeight: cell.style.lineHeight,
+                computedHeight: computedStyle?.height,
+                computedPaddingTop: computedStyle?.paddingTop,
+                computedLineHeight: computedStyle?.lineHeight,
+                computedFontSize: computedStyle?.fontSize,
+              });
+            }
 
-              cell.style.paddingTop = `${topPadding}px`;
-              cell.style.paddingBottom = `${bottomPadding}px`;
-              cell.style.lineHeight = 'normal';
+            // html2canvas doesn't support vertical-align for table cells
+            // We need to use padding to create the centering effect
+
+            if (height > 0) {
+              // Get the actual font size from computed styles
+              const computedFontSize = computedStyle ? parseFloat(computedStyle.fontSize) : 14;
+
+              // Calculate padding to center the text
+              const totalPadding = height - computedFontSize;
+              const topPadding = Math.floor(totalPadding / 2);
+              const bottomPadding = totalPadding - topPadding;
+
+              // Clear all conflicting properties
+              cell.style.verticalAlign = '';
+              cell.style.lineHeight = '1';
+              cell.style.boxSizing = 'border-box';
+
+              // Set padding with explicit values
+              const horizontalPadding = '8px';
+              cell.style.padding = `${topPadding}px ${horizontalPadding} ${bottomPadding}px ${horizontalPadding}`;
+
+              // Ensure height is maintained
+              cell.style.height = `${height}px`;
               cell.style.display = 'table-cell';
-              cell.style.verticalAlign = 'middle';
+
+              if (index < 3) {
+                console.log(`Cell ${index} after fix:`, {
+                  height: cell.style.height,
+                  padding: cell.style.padding,
+                  lineHeight: cell.style.lineHeight,
+                  fontSize: computedFontSize,
+                  topPadding,
+                  bottomPadding
+                });
+              }
             }
           }
         });
 
-        console.log('Applied vertical centering fixes to table cells');
+        console.log('Applied vertical centering fixes to all table cells');
       }
     }
   });
