@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Search, Mail, Calendar, Shield, User, ChevronDown } from 'lucide-react';
 import { Card, Input, Button } from '../../../components/Shared/SharedComponents';
 import { supabase } from '../../../lib/supabase';
 import { useNotifications } from '../../../contexts/NotificationContext';
+import { LoadingSpinner } from './shared/LoadingSpinner';
+import { EmptyState } from './shared/EmptyState';
+import { filterBySearchTerm } from '../utils/filterUtils';
 
 interface User {
   id: string;
@@ -42,13 +45,10 @@ export const UserManagement: React.FC = () => {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const { success, error } = useNotifications();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
-      console.log('[UserManagement] Fetching users with roles...');
-
-      // Fetch users with their roles (removed is_active filter to see all users)
       const { data: usersData, error: usersError } = await supabase
         .from('public_users')
         .select(`
@@ -67,39 +67,28 @@ export const UserManagement: React.FC = () => {
         `)
         .order('email', { ascending: true });
 
-      if (usersError) {
-        console.error('[UserManagement] Error fetching users:', usersError);
-        throw usersError;
-      }
+      if (usersError) throw usersError;
 
-      console.log('[UserManagement] Users data:', usersData);
-
-      // Fetch all available roles (removed is_active filter to see all roles)
       const { data: rolesData, error: rolesError } = await supabase
         .from('roles')
         .select('*')
         .order('name', { ascending: true });
 
-      if (rolesError) {
-        console.error('[UserManagement] Error fetching roles:', rolesError);
-        throw rolesError;
-      }
-
-      console.log('[UserManagement] Roles data:', rolesData);
+      if (rolesError) throw rolesError;
 
       setUsers(usersData || []);
       setRoles(rolesData || []);
     } catch (err) {
-      console.error('[UserManagement] Error in fetchData:', err);
+      console.error('Error fetching user management data:', err);
       error('Failed to load data', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [error]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const assignRole = async (userId: string, roleId: string) => {
     try {
@@ -138,17 +127,10 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredUsers = filterBySearchTerm(users, searchTerm, ['email', 'full_name']);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-tg-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingSpinner color="tg-primary" />;
   }
 
   return (
@@ -341,12 +323,12 @@ export const UserManagement: React.FC = () => {
       </div>
 
       {filteredUsers.length === 0 && (
-        <Card className="p-8 text-center">
-          <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-800 mb-2">No users found</h3>
-          <p className="text-gray-600">
-            {searchTerm ? 'Try adjusting your search terms' : 'No active users available'}
-          </p>
+        <Card>
+          <EmptyState
+            icon={Users}
+            title="No users found"
+            description={searchTerm ? 'Try adjusting your search terms' : 'No active users available'}
+          />
         </Card>
       )}
     </div>

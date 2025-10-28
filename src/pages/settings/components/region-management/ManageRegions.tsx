@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Map, Plus, Edit, Trash2, Search } from 'lucide-react';
-import { Button, Input } from '../../../../components/Shared/SharedComponents';
-import { supabase } from '../../../../lib/supabase';
+import { Button } from '../../../../components/Shared/SharedComponents';
 import { useNotifications } from '../../../../contexts/NotificationContext';
 import { CreateRegionModal } from './CreateRegionModal';
+import { GenericEditModal } from '../shared/GenericEditModal';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { EmptyState } from '../shared/EmptyState';
+import { useDataFetch } from '../../hooks/useDataFetch';
+import { filterBySearchTerm } from '../../utils/filterUtils';
+import { deleteItem } from '../../utils/deleteUtils';
 
 interface Region {
   id: string;
@@ -15,131 +20,18 @@ interface Region {
   updated_at: string;
 }
 
-interface EditRegionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  region: Region | null;
-  onSave: () => void;
-}
-
-const EditRegionModal: React.FC<EditRegionModalProps> = ({ isOpen, onClose, region, onSave }) => {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    code: ''
-  });
-  const { success, error } = useNotifications();
-
-  useEffect(() => {
-    if (region) {
-      setFormData({
-        name: region.name,
-        code: region.code || ''
-      });
-    }
-  }, [region]);
-
-  const handleSave = async () => {
-    if (!region || !formData.name.trim()) return;
-
-    try {
-      setLoading(true);
-      
-      const { error: updateError } = await supabase
-        .from('master_regions')
-        .update({
-          name: formData.name.trim(),
-          code: formData.code.trim() || null
-        })
-        .eq('id', region.id);
-
-      if (updateError) throw updateError;
-
-      success('Region updated', 'Region has been updated successfully');
-      onSave();
-      onClose();
-    } catch (err) {
-      console.error('Error updating region:', err);
-      error('Failed to update region', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Edit Region</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Region Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter region name"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Region Code</label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter region code (optional)"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="secondary" onClick={handleSave} loading={loading}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const ManageRegions: React.FC = () => {
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingRegion, setEditingRegion] = useState<Region | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { success, error } = useNotifications();
 
-  const fetchRegions = async () => {
-    try {
-      setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('master_regions')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (fetchError) throw fetchError;
-      setRegions(data || []);
-    } catch (err) {
-      console.error('Error fetching regions:', err);
-      error('Failed to load regions', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRegions();
-  }, []);
+  const { data: regions, loading, refetch: fetchRegions } = useDataFetch<Region>({
+    tableName: 'master_regions',
+    orderBy: { column: 'name', ascending: true },
+    errorMessage: 'Failed to load regions'
+  });
 
   const toggleRegionStatus = async (regionId: string, currentStatus: boolean) => {
     try {
@@ -162,35 +54,24 @@ export const ManageRegions: React.FC = () => {
   };
 
   const deleteRegion = async (regionId: string) => {
-    if (!confirm('Are you sure you want to delete this region? This action cannot be undone.')) return;
-    
-    try {
-      const { error: deleteError } = await supabase
-        .from('master_regions')
-        .delete()
-        .eq('id', regionId);
+    const result = await deleteItem(
+      'master_regions',
+      regionId,
+      'Are you sure you want to delete this region? This action cannot be undone.'
+    );
 
-      if (deleteError) throw deleteError;
-
-      setRegions(prev => prev.filter(region => region.id !== regionId));
+    if (result.success) {
+      await fetchRegions();
       success('Region deleted', 'Region has been deleted successfully');
-    } catch (err) {
-      console.error('Error deleting region:', err);
-      error('Failed to delete region', err instanceof Error ? err.message : 'Unknown error');
+    } else if (result.error) {
+      error('Failed to delete region', result.error.message);
     }
   };
 
-  const filteredRegions = regions.filter(region =>
-    region.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (region.code && region.code.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredRegions = filterBySearchTerm(regions, searchTerm, ['name', 'code']);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingSpinner color="tg-green" />;
   }
 
   return (
@@ -291,13 +172,11 @@ export const ManageRegions: React.FC = () => {
         </table>
 
         {filteredRegions.length === 0 && (
-          <div className="p-8 text-center">
-            <Map className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-800 mb-2">No regions found</h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'Try adjusting your search terms' : 'No regions have been created yet'}
-            </p>
-          </div>
+          <EmptyState
+            icon={Map}
+            title="No regions found"
+            description={searchTerm ? 'Try adjusting your search terms' : 'No regions have been created yet'}
+          />
         )}
       </div>
 
@@ -307,12 +186,18 @@ export const ManageRegions: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onSave={fetchRegions}
       />
-      
-      <EditRegionModal
+
+      <GenericEditModal
         isOpen={!!editingRegion}
         onClose={() => setEditingRegion(null)}
-        region={editingRegion}
+        item={editingRegion}
         onSave={fetchRegions}
+        tableName="master_regions"
+        title="Region"
+        fields={[
+          { name: 'name', label: 'Region Name', placeholder: 'Enter region name', required: true },
+          { name: 'code', label: 'Region Code', placeholder: 'Enter region code (optional)' }
+        ]}
       />
     </div>
   );

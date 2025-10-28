@@ -140,8 +140,7 @@ export const ManageCrops: React.FC = () => {
                   size="sm"
                   icon={Edit}
                   onClick={() => {
-                    // TODO: Implement edit crop modal
-                    console.log('Edit crop:', crop.id);
+
                   }}
                   fullWidth
                 >

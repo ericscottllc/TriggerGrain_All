@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Button } from '../../../../components/Shared/SharedComponents';
-import { supabase } from '../../../../lib/supabase';
 import { useNotifications } from '../../../../contexts/NotificationContext';
 import { CreateElevatorModal } from './CreateElevatorModal';
+import { GenericEditModal } from '../shared/GenericEditModal';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { EmptyState } from '../shared/EmptyState';
+import { useDataFetch } from '../../hooks/useDataFetch';
+import { filterBySearchTerm } from '../../utils/filterUtils';
+import { deleteItem } from '../../utils/deleteUtils';
 
 interface Elevator {
   id: string;
@@ -15,162 +20,38 @@ interface Elevator {
   updated_at: string;
 }
 
-interface EditElevatorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  elevator: Elevator | null;
-  onSave: () => void;
-}
-
-const EditElevatorModal: React.FC<EditElevatorModalProps> = ({ isOpen, onClose, elevator, onSave }) => {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    code: ''
-  });
-  const { success, error } = useNotifications();
-
-  useEffect(() => {
-    if (elevator) {
-      setFormData({
-        name: elevator.name,
-        code: elevator.code || ''
-      });
-    }
-  }, [elevator]);
-
-  const handleSave = async () => {
-    if (!elevator || !formData.name.trim()) return;
-
-    try {
-      setLoading(true);
-      
-      const { error: updateError } = await supabase
-        .from('master_elevators')
-        .update({
-          name: formData.name.trim(),
-          code: formData.code.trim() || null
-        })
-        .eq('id', elevator.id);
-
-      if (updateError) throw updateError;
-
-      success('Elevator updated', 'Elevator has been updated successfully');
-      onSave();
-      onClose();
-    } catch (err) {
-      console.error('Error updating elevator:', err);
-      error('Failed to update elevator', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Edit Elevator</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Elevator Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter elevator name"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Elevator Code</label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter elevator code (optional)"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="secondary" onClick={handleSave} loading={loading}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const ManageElevators: React.FC = () => {
-  const [elevators, setElevators] = useState<Elevator[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingElevator, setEditingElevator] = useState<Elevator | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { success, error } = useNotifications();
 
-  const fetchElevators = async () => {
-    try {
-      setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('master_elevators')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (fetchError) throw fetchError;
-      setElevators(data || []);
-    } catch (err) {
-      console.error('Error fetching elevators:', err);
-      error('Failed to load elevators', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchElevators();
-  }, []);
+  const { data: elevators, loading, refetch: fetchElevators } = useDataFetch<Elevator>({
+    tableName: 'master_elevators',
+    orderBy: { column: 'name', ascending: true },
+    errorMessage: 'Failed to load elevators'
+  });
 
   const deleteElevator = async (elevatorId: string) => {
-    if (!confirm('Are you sure you want to delete this elevator? This action cannot be undone.')) return;
-    
-    try {
-      const { error: deleteError } = await supabase
-        .from('master_elevators')
-        .delete()
-        .eq('id', elevatorId);
+    const result = await deleteItem(
+      'master_elevators',
+      elevatorId,
+      'Are you sure you want to delete this elevator? This action cannot be undone.'
+    );
 
-      if (deleteError) throw deleteError;
-
-      setElevators(prev => prev.filter(elevator => elevator.id !== elevatorId));
+    if (result.success) {
+      await fetchElevators();
       success('Elevator deleted', 'Elevator has been deleted successfully');
-    } catch (err) {
-      console.error('Error deleting elevator:', err);
-      error('Failed to delete elevator', err instanceof Error ? err.message : 'Unknown error');
+    } else if (result.error) {
+      error('Failed to delete elevator', result.error.message);
     }
   };
 
-  const filteredElevators = elevators.filter(elevator =>
-    elevator.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (elevator.code && elevator.code.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredElevators = filterBySearchTerm(elevators, searchTerm, ['name', 'code']);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingSpinner color="tg-green" />;
   }
 
   return (
@@ -271,13 +152,11 @@ export const ManageElevators: React.FC = () => {
         </table>
 
         {filteredElevators.length === 0 && (
-          <div className="p-8 text-center">
-            <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-800 mb-2">No elevators found</h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'Try adjusting your search terms' : 'No elevators have been created yet'}
-            </p>
-          </div>
+          <EmptyState
+            icon={Building2}
+            title="No elevators found"
+            description={searchTerm ? 'Try adjusting your search terms' : 'No elevators have been created yet'}
+          />
         )}
       </div>
 
@@ -287,12 +166,18 @@ export const ManageElevators: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onSave={fetchElevators}
       />
-      
-      <EditElevatorModal
+
+      <GenericEditModal
         isOpen={!!editingElevator}
         onClose={() => setEditingElevator(null)}
-        elevator={editingElevator}
+        item={editingElevator}
         onSave={fetchElevators}
+        tableName="master_elevators"
+        title="Elevator"
+        fields={[
+          { name: 'name', label: 'Elevator Name', placeholder: 'Enter elevator name', required: true },
+          { name: 'code', label: 'Elevator Code', placeholder: 'Enter elevator code (optional)' }
+        ]}
       />
     </div>
   );

@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Plus, Edit, Trash2, Search } from 'lucide-react';
 import { Button } from '../../../../components/Shared/SharedComponents';
-import { supabase } from '../../../../lib/supabase';
 import { useNotifications } from '../../../../contexts/NotificationContext';
 import { CreateTownModal } from './CreateTownModal';
+import { GenericEditModal } from '../shared/GenericEditModal';
+import { LoadingSpinner } from '../shared/LoadingSpinner';
+import { EmptyState } from '../shared/EmptyState';
+import { useDataFetch } from '../../hooks/useDataFetch';
+import { filterBySearchTerm } from '../../utils/filterUtils';
+import { deleteItem } from '../../utils/deleteUtils';
 
 interface Town {
   id: string;
@@ -15,162 +20,38 @@ interface Town {
   updated_at: string;
 }
 
-interface EditTownModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  town: Town | null;
-  onSave: () => void;
-}
-
-const EditTownModal: React.FC<EditTownModalProps> = ({ isOpen, onClose, town, onSave }) => {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    province: ''
-  });
-  const { success, error } = useNotifications();
-
-  useEffect(() => {
-    if (town) {
-      setFormData({
-        name: town.name,
-        province: town.province || ''
-      });
-    }
-  }, [town]);
-
-  const handleSave = async () => {
-    if (!town || !formData.name.trim()) return;
-
-    try {
-      setLoading(true);
-      
-      const { error: updateError } = await supabase
-        .from('master_towns')
-        .update({
-          name: formData.name.trim(),
-          province: formData.province.trim() || null
-        })
-        .eq('id', town.id);
-
-      if (updateError) throw updateError;
-
-      success('Town updated', 'Town has been updated successfully');
-      onSave();
-      onClose();
-    } catch (err) {
-      console.error('Error updating town:', err);
-      error('Failed to update town', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Edit Town</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Town Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter town name"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Province</label>
-              <input
-                type="text"
-                value={formData.province}
-                onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-tg-green"
-                placeholder="Enter province (optional)"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="secondary" onClick={handleSave} loading={loading}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const ManageTowns: React.FC = () => {
-  const [towns, setTowns] = useState<Town[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingTown, setEditingTown] = useState<Town | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { success, error } = useNotifications();
 
-  const fetchTowns = async () => {
-    try {
-      setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('master_towns')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (fetchError) throw fetchError;
-      setTowns(data || []);
-    } catch (err) {
-      console.error('Error fetching towns:', err);
-      error('Failed to load towns', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTowns();
-  }, []);
+  const { data: towns, loading, refetch: fetchTowns } = useDataFetch<Town>({
+    tableName: 'master_towns',
+    orderBy: { column: 'name', ascending: true },
+    errorMessage: 'Failed to load towns'
+  });
 
   const deleteTown = async (townId: string) => {
-    if (!confirm('Are you sure you want to delete this town? This action cannot be undone.')) return;
-    
-    try {
-      const { error: deleteError } = await supabase
-        .from('master_towns')
-        .delete()
-        .eq('id', townId);
+    const result = await deleteItem(
+      'master_towns',
+      townId,
+      'Are you sure you want to delete this town? This action cannot be undone.'
+    );
 
-      if (deleteError) throw deleteError;
-
-      setTowns(prev => prev.filter(town => town.id !== townId));
+    if (result.success) {
+      await fetchTowns();
       success('Town deleted', 'Town has been deleted successfully');
-    } catch (err) {
-      console.error('Error deleting town:', err);
-      error('Failed to delete town', err instanceof Error ? err.message : 'Unknown error');
+    } else if (result.error) {
+      error('Failed to delete town', result.error.message);
     }
   };
 
-  const filteredTowns = towns.filter(town =>
-    town.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (town.province && town.province.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredTowns = filterBySearchTerm(towns, searchTerm, ['name', 'province']);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <LoadingSpinner color="tg-green" />;
   }
 
   return (
@@ -271,13 +152,11 @@ export const ManageTowns: React.FC = () => {
         </table>
 
         {filteredTowns.length === 0 && (
-          <div className="p-8 text-center">
-            <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-800 mb-2">No towns found</h3>
-            <p className="text-gray-600">
-              {searchTerm ? 'Try adjusting your search terms' : 'No towns have been created yet'}
-            </p>
-          </div>
+          <EmptyState
+            icon={MapPin}
+            title="No towns found"
+            description={searchTerm ? 'Try adjusting your search terms' : 'No towns have been created yet'}
+          />
         )}
       </div>
 
@@ -287,12 +166,18 @@ export const ManageTowns: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onSave={fetchTowns}
       />
-      
-      <EditTownModal
+
+      <GenericEditModal
         isOpen={!!editingTown}
         onClose={() => setEditingTown(null)}
-        town={editingTown}
+        item={editingTown}
         onSave={fetchTowns}
+        tableName="master_towns"
+        title="Town"
+        fields={[
+          { name: 'name', label: 'Town Name', placeholder: 'Enter town name', required: true },
+          { name: 'province', label: 'Province', placeholder: 'Enter province (optional)' }
+        ]}
       />
     </div>
   );

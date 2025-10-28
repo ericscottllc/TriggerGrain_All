@@ -172,8 +172,7 @@ export const ManageClasses: React.FC = () => {
                         size="sm"
                         icon={Edit}
                         onClick={() => {
-                          // TODO: Implement edit class modal
-                          console.log('Edit class:', cropClass.id);
+
                         }}
                         fullWidth
                       >
