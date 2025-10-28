@@ -44,14 +44,17 @@ export const RegionTable: React.FC<RegionTableProps> = ({
         </colgroup>
         <tbody>
         {/* Region header row: region name + month headers */}
-        <tr>
+        <tr style={{ height: '32px' }}>
           <td
             colSpan={2}
-            className="text-black font-bold text-center px-2 py-1 text-sm"
+            className="text-black font-bold text-sm"
             style={{
               backgroundColor: THEME_COLORS.PRIMARY_BORDER,
               borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
               borderRight: `2px solid ${THEME_COLORS.BLACK}`,
+              textAlign: 'center',
+              verticalAlign: 'middle',
+              padding: '4px 8px'
             }}
           >
             {region.region}
@@ -59,10 +62,13 @@ export const RegionTable: React.FC<RegionTableProps> = ({
           {availableMonths.map((month) => (
             <td
               key={month}
-              className="font-bold text-center px-2 py-1 text-black text-sm"
+              className="font-bold text-black text-sm"
               style={{
                 backgroundColor: THEME_COLORS.PRIMARY_BORDER,
                 borderBottom: `2px solid ${THEME_COLORS.BLACK}`,
+                textAlign: 'center',
+                verticalAlign: 'middle',
+                padding: '4px 8px'
               }}
             >
               {month}
@@ -74,23 +80,28 @@ export const RegionTable: React.FC<RegionTableProps> = ({
         {region.entries.map((entry, rIdx) => (
           <tr
             key={`${entry.elevator}-${entry.town}-${rIdx}`}
-            style={{ backgroundColor: rIdx % 2 === 0 ? THEME_COLORS.ALTERNATE_ROW : THEME_COLORS.WHITE }}
+            style={{
+              backgroundColor: rIdx % 2 === 0 ? THEME_COLORS.ALTERNATE_ROW : THEME_COLORS.WHITE,
+              height: '28px'
+            }}
           >
             <td
-              className="px-2 py-1 font-medium text-black text-sm"
+              className="font-medium text-black text-sm"
               style={{
                 verticalAlign: 'middle',
-                textAlign: 'left'
+                textAlign: 'left',
+                padding: '4px 8px'
               }}
             >
               {entry.elevator}
             </td>
             <td
-              className="px-2 py-1 text-black text-sm"
+              className="text-black text-sm"
               style={{
                 borderRight: `2px solid ${THEME_COLORS.BLACK}`,
                 verticalAlign: 'middle',
-                textAlign: 'left'
+                textAlign: 'left',
+                padding: '4px 8px'
               }}
             >
               {entry.town}
@@ -106,13 +117,14 @@ export const RegionTable: React.FC<RegionTableProps> = ({
               return (
                 <td
                   key={month}
-                  className="px-2 py-1 text-right text-black text-sm"
+                  className="text-black text-sm"
                   style={{
                     fontWeight: isMax ? 700 : 500,
                     backgroundColor: isMax ? THEME_COLORS.PRIMARY_BORDER : undefined,
                     fontVariantNumeric: "tabular-nums",
                     verticalAlign: 'middle',
-                    textAlign: 'right'
+                    textAlign: 'right',
+                    padding: '4px 8px'
                   }}
                 >
                   {formatMoney(price)}
