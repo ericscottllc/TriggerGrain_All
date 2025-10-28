@@ -10,7 +10,7 @@ import type {
 } from '../types/grainEntryTypes';
 
 export const useGrainEntryData = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [cropClasses, setCropClasses] = useState<CropClass[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [elevatorTownPairs, setElevatorTownPairs] = useState<ElevatorTownPair[]>([]);
@@ -48,6 +48,7 @@ export const useGrainEntryData = () => {
 
   const fetchCropClasses = useCallback(async () => {
     try {
+      console.log('[fetchCropClasses] Starting fetch...');
       const { data, error } = await supabase
         .from('crop_classes')
         .select('id, name, code, crop_id')
@@ -55,14 +56,15 @@ export const useGrainEntryData = () => {
         .order('name');
 
       if (error) {
-        console.error('Error fetching crop classes:', error);
+        console.error('[fetchCropClasses] Error:', error);
         throw error;
       }
 
+      console.log('[fetchCropClasses] Fetched', data?.length || 0, 'crop classes');
       setCropClasses(data || []);
       return data || [];
     } catch (error) {
-      console.error('Error fetching crop classes:', error);
+      console.error('[fetchCropClasses] Exception:', error);
       setCropClasses([]);
       return [];
     }
@@ -70,6 +72,7 @@ export const useGrainEntryData = () => {
 
   const fetchRegions = useCallback(async (cropClassId?: string) => {
     try {
+      console.log('[fetchRegions] Starting fetch...');
       const { data, error } = await supabase
         .from('master_regions')
         .select('id, name, code')
@@ -77,14 +80,15 @@ export const useGrainEntryData = () => {
         .order('name');
 
       if (error) {
-        console.error('Error fetching regions:', error);
+        console.error('[fetchRegions] Error:', error);
         throw error;
       }
 
+      console.log('[fetchRegions] Fetched', data?.length || 0, 'regions');
       setRegions(data || []);
       return data || [];
     } catch (error) {
-      console.error('Error fetching regions:', error);
+      console.error('[fetchRegions] Exception:', error);
       setRegions([]);
       return [];
     }
@@ -370,8 +374,19 @@ export const useGrainEntryData = () => {
     await fetchGrainEntries();
   }, [user, fetchGrainEntries]);
 
-  // Initialize data on mount
   useEffect(() => {
+    if (authLoading) {
+      console.log('[useGrainEntryData] Auth is still loading, waiting...');
+      return;
+    }
+
+    if (!user) {
+      console.log('[useGrainEntryData] No user authenticated');
+      setLoading(false);
+      return;
+    }
+
+    console.log('[useGrainEntryData] User authenticated, fetching data...');
     const initializeData = async () => {
       setLoading(true);
       await Promise.all([
@@ -379,10 +394,11 @@ export const useGrainEntryData = () => {
         fetchRegions()
       ]);
       setLoading(false);
+      console.log('[useGrainEntryData] Data fetch complete');
     };
 
     initializeData();
-  }, [fetchCropClasses, fetchRegions]);
+  }, [authLoading, user, fetchCropClasses, fetchRegions]);
 
   return {
     cropClasses,
