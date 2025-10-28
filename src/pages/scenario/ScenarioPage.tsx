@@ -1,13 +1,13 @@
-import { Workflow } from 'lucide-react';
-import { PlaceholderPage } from '../../components/Shared/PlaceholderPage';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { ScenarioListView } from './components/ScenarioListView';
+import { ScenarioDashboard } from './components/ScenarioDashboard';
 
 export const ScenarioPage = () => {
   return (
-    <PlaceholderPage
-      title="Scenario"
-      icon={Workflow}
-      description="Model different market scenarios and explore potential outcomes for your grain marketing strategy."
-      color="tg-green"
-    />
+    <Routes>
+      <Route index element={<ScenarioListView />} />
+      <Route path=":scenarioId" element={<ScenarioDashboard />} />
+    </Routes>
   );
 };
