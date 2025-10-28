@@ -18,6 +18,7 @@ import { ReferencesPage } from './pages/references';
 import { AnalyticsPage } from './pages/analytics';
 import { ScenarioPage } from './pages/scenario';
 import { ClientsPage } from './pages/clients';
+import { ClientDashboardPage } from './pages/clients/ClientDashboardPage';
 
 const AppContent: React.FC = () => {
   const { user, userProfile, loading } = useAuth();
@@ -86,6 +87,7 @@ const AppContent: React.FC = () => {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/scenario" element={<ScenarioPage />} />
           <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/clients/:clientId" element={<ClientDashboardPage />} />
         </Routes>
       </motion.div>
 
