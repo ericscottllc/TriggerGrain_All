@@ -14,7 +14,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <motion.div
-      className={`h-screen bg-white border-r border-gray-200 shadow-lg relative overflow-hidden ${
+      className={`h-screen bg-white border-r border-gray-200 shadow-lg relative flex flex-col ${
         isCollapsed ? 'w-20' : 'w-72'
       }`}
       initial={false}
@@ -22,7 +22,7 @@ export const Sidebar: React.FC = () => {
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
       {/* Header */}
-      <div className="p-6 border-b border-gray-200 relative z-10">
+      <div className="p-6 border-b border-gray-200 relative z-10 flex-shrink-0">
         <div className="flex items-center justify-between">
           <AnimatePresence mode="wait">
             {!isCollapsed && (
@@ -130,7 +130,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* User Profile & Logout */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+      <div className="p-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 mt-auto">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 bg-tg-primary rounded-full flex items-center justify-center text-white font-semibold">
             {user?.email?.charAt(0).toUpperCase()}
