@@ -122,16 +122,21 @@ export const OnePagerPage: React.FC = () => {
   }, [selectedDate, selectedCropClass, selectedCropComparison, getGrainEntriesForQuery]);
 
   const handleExportPNG = useCallback(async () => {
-    if (onePagerData.length === 0) return;
+    if (onePagerData.length === 0) {
+      alert('No data to export. Please run a query first.');
+      return;
+    }
 
     setIsExporting(true);
 
     try {
       const filename = `${selectedCropComparisonName}_${selectedCropClassName}_${selectedDate}.png`;
       await exportToPNG('onepager-content', filename);
+      console.log('Export completed successfully');
     } catch (error) {
       console.error('Error exporting PNG:', error);
-      alert('Failed to export PNG. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to export PNG: ${errorMessage}\n\nPlease check the browser console for details.`);
     } finally {
       setIsExporting(false);
     }
