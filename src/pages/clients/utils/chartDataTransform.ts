@@ -18,6 +18,23 @@ export interface CropClassChartData {
   series: SeriesConfig[];
 }
 
+export interface TermStructureDataPoint {
+  deliveryMonth: string;
+  deliverySort: number;
+  futures: number | null;
+  basis: number | null;
+  [key: string]: string | number | null;
+}
+
+export interface CropClassTermStructure {
+  cropClassName: string;
+  dates: string[];
+  termStructureByDate: Map<string, {
+    data: TermStructureDataPoint[];
+    locationKeys: string[];
+  }>;
+}
+
 const COLOR_PALETTE = [
   '#10b981',
   '#3b82f6',
@@ -143,4 +160,141 @@ export const getDateRange = (entries: ClientPricingEntry[]): { start: string; en
     start: dates[0],
     end: dates[dates.length - 1],
   };
+};
+
+const MONTH_ORDER: { [key: string]: number } = {
+  'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+  'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+};
+
+const createDeliveryMonthKey = (month: string, year: number): string => {
+  return `${month} ${year}`;
+};
+
+const sortDeliveryMonths = (a: { month: string; year: number }, b: { month: string; year: number }): number => {
+  if (a.year !== b.year) {
+    return a.year - b.year;
+  }
+  return (MONTH_ORDER[a.month] || 0) - (MONTH_ORDER[b.month] || 0);
+};
+
+export const transformPricingDataForTermStructure = (
+  entries: ClientPricingEntry[]
+): CropClassTermStructure[] => {
+  const cropClassGroups = new Map<string, ClientPricingEntry[]>();
+
+  entries.forEach(entry => {
+    const className = entry.crop_classes?.name || 'Unknown';
+    if (!cropClassGroups.has(className)) {
+      cropClassGroups.set(className, []);
+    }
+    cropClassGroups.get(className)!.push(entry);
+  });
+
+  const result: CropClassTermStructure[] = [];
+
+  cropClassGroups.forEach((classEntries, className) => {
+    const dates = Array.from(new Set(classEntries.map(e => e.date))).sort();
+    const termStructureByDate = new Map<string, {
+      data: TermStructureDataPoint[];
+      locationKeys: string[];
+    }>();
+
+    dates.forEach(date => {
+      const entriesForDate = classEntries.filter(e => e.date === date);
+
+      const deliveryMonthMap = new Map<string, {
+        futures: number[];
+        locations: Map<string, { cash: number[]; basis: number[] }>;
+      }>();
+
+      entriesForDate.forEach(entry => {
+        const deliveryKey = createDeliveryMonthKey(entry.month, entry.year);
+        const locationKey = `${entry.master_elevators?.name || 'Unknown'} - ${entry.master_towns?.name || 'Unknown'}`;
+
+        if (!deliveryMonthMap.has(deliveryKey)) {
+          deliveryMonthMap.set(deliveryKey, {
+            futures: [],
+            locations: new Map(),
+          });
+        }
+
+        const deliveryData = deliveryMonthMap.get(deliveryKey)!;
+
+        if (entry.futures !== null) {
+          deliveryData.futures.push(entry.futures);
+        }
+
+        if (!deliveryData.locations.has(locationKey)) {
+          deliveryData.locations.set(locationKey, { cash: [], basis: [] });
+        }
+
+        const locationData = deliveryData.locations.get(locationKey)!;
+        if (entry.cash_price !== null) {
+          locationData.cash.push(entry.cash_price);
+        }
+        if (entry.basis !== null) {
+          locationData.basis.push(entry.basis);
+        }
+      });
+
+      const deliveryMonths = Array.from(deliveryMonthMap.keys())
+        .map(key => {
+          const parts = key.split(' ');
+          return { month: parts[0], year: parseInt(parts[1]), key };
+        })
+        .sort(sortDeliveryMonths);
+
+      const allLocations = new Set<string>();
+      deliveryMonthMap.forEach(data => {
+        data.locations.forEach((_, location) => allLocations.add(location));
+      });
+      const locationKeys = Array.from(allLocations).sort();
+
+      const termData: TermStructureDataPoint[] = deliveryMonths.map(({ key, month, year }, index) => {
+        const deliveryData = deliveryMonthMap.get(key)!;
+
+        const avgFutures = deliveryData.futures.length > 0
+          ? deliveryData.futures.reduce((a, b) => a + b, 0) / deliveryData.futures.length
+          : null;
+
+        const dataPoint: TermStructureDataPoint = {
+          deliveryMonth: key,
+          deliverySort: index,
+          futures: avgFutures,
+          basis: null,
+        };
+
+        locationKeys.forEach(location => {
+          const locationData = deliveryData.locations.get(location);
+          if (locationData) {
+            const avgCash = locationData.cash.length > 0
+              ? locationData.cash.reduce((a, b) => a + b, 0) / locationData.cash.length
+              : null;
+            const avgBasis = locationData.basis.length > 0
+              ? locationData.basis.reduce((a, b) => a + b, 0) / locationData.basis.length
+              : null;
+
+            dataPoint[`${location}_cash`] = avgCash;
+            dataPoint[`${location}_basis`] = avgBasis;
+          }
+        });
+
+        return dataPoint;
+      });
+
+      termStructureByDate.set(date, {
+        data: termData,
+        locationKeys,
+      });
+    });
+
+    result.push({
+      cropClassName: className,
+      dates,
+      termStructureByDate,
+    });
+  });
+
+  return result;
 };

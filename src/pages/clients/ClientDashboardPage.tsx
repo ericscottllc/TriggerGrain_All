@@ -4,8 +4,8 @@ import { motion } from 'framer-motion';
 import { Users, ArrowLeft, Edit, Building2, MapPin, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
 import { useClientDetails } from './hooks/useClientDetails';
 import { useClientPricing } from './hooks/useClientPricing';
-import { CropClassChartPanel } from './components/CropClassChartPanel';
-import { transformPricingDataForCharts, getDateRange } from './utils/chartDataTransform';
+import { TermStructurePanel } from './components/TermStructurePanel';
+import { transformPricingDataForTermStructure, getDateRange } from './utils/chartDataTransform';
 import type { ClientStatus } from './types/clientTypes';
 
 export const ClientDashboardPage: React.FC = () => {
@@ -23,8 +23,8 @@ export const ClientDashboardPage: React.FC = () => {
     }
   }, [clientId, showPricing, fetchClientPricing]);
 
-  const chartData = useMemo(() => {
-    return transformPricingDataForCharts(pricingData);
+  const termStructureData = useMemo(() => {
+    return transformPricingDataForTermStructure(pricingData);
   }, [pricingData]);
 
   const dateRange = useMemo(() => {
@@ -262,19 +262,16 @@ export const ClientDashboardPage: React.FC = () => {
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
                   </div>
-                ) : chartData.length > 0 ? (
+                ) : termStructureData.length > 0 ? (
                   <div className="space-y-6">
-                    {chartData.map((cropClassData, index) => (
+                    {termStructureData.map((cropTermStructure, index) => (
                       <motion.div
-                        key={cropClassData.cropClassName}
+                        key={cropTermStructure.cropClassName}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                       >
-                        <CropClassChartPanel
-                          chartData={cropClassData}
-                          defaultExpanded={index === 0}
-                        />
+                        <TermStructurePanel termStructure={cropTermStructure} />
                       </motion.div>
                     ))}
                   </div>

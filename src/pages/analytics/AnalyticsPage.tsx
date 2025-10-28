@@ -3,8 +3,8 @@ import { motion } from 'framer-motion';
 import { TrendingUp, Calendar } from 'lucide-react';
 import { useAnalyticsData } from './hooks/useAnalyticsData';
 import { AnalyticsFiltersPanel } from './components/AnalyticsFilters';
-import { CropClassPanel } from './components/CropClassPanel';
-import { transformAnalyticsDataForCharts, getDateRange } from './utils/analyticsTransform';
+import { TermStructurePanel } from './components/TermStructurePanel';
+import { transformAnalyticsDataForTermStructure, getDateRange } from './utils/analyticsTransform';
 import type { AnalyticsFilters } from './types/analyticsTypes';
 
 export const AnalyticsPage = () => {
@@ -26,8 +26,8 @@ export const AnalyticsPage = () => {
     fetchEntries(filters);
   }, [filters, fetchEntries]);
 
-  const chartData = useMemo(() => {
-    return transformAnalyticsDataForCharts(entries);
+  const termStructureData = useMemo(() => {
+    return transformAnalyticsDataForTermStructure(entries);
   }, [entries]);
 
   const dateRange = useMemo(() => {
@@ -79,16 +79,19 @@ export const AnalyticsPage = () => {
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : chartData.length > 0 ? (
+          ) : termStructureData.length > 0 ? (
             <div className="space-y-6">
-              {chartData.map((cropClassData, index) => (
+              {termStructureData.map((cropTermStructure, index) => (
                 <motion.div
-                  key={cropClassData.cropClassName}
+                  key={cropTermStructure.cropClassName}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.1 }}
                 >
-                  <CropClassPanel chartData={cropClassData} defaultExpanded={index === 0} />
+                  <TermStructurePanel
+                    termStructure={cropTermStructure}
+                    defaultExpanded={index === 0}
+                  />
                 </motion.div>
               ))}
             </div>
