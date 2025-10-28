@@ -1,5 +1,5 @@
 export interface AnalyticsFilters {
-  dateRange: '30dates' | '60dates' | '90dates' | 'custom';
+  dateRange: '30dates' | '60dates' | '90dates' | '180dates' | '365dates' | 'custom';
   startDate?: string;
   endDate?: string;
   crop_ids: string[];

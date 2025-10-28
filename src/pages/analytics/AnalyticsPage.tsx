@@ -1,22 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Calendar } from 'lucide-react';
+import { TrendingUp, Calendar, BarChart3, LineChart } from 'lucide-react';
 import { useAnalyticsData } from './hooks/useAnalyticsData';
 import { AnalyticsFiltersPanel } from './components/AnalyticsFilters';
 import { TermStructurePanel } from './components/TermStructurePanel';
-import { transformAnalyticsDataForTermStructure, getDateRange } from './utils/analyticsTransform';
+import { TimeSeriesChart } from './components/TimeSeriesChart';
+import { StatisticsSummary } from './components/StatisticsSummary';
+import {
+  transformAnalyticsDataForTermStructure,
+  transformDataForTimeSeries,
+  transformDataByCropClass,
+  transformDataByLocation,
+  getDateRange,
+} from './utils/analyticsTransform';
 import type { AnalyticsFilters } from './types/analyticsTypes';
 
 export const AnalyticsPage = () => {
   const { entries, crops, classes, elevators, towns, loading, fetchEntries, fetchMetadata } = useAnalyticsData();
   const [filters, setFilters] = useState<Partial<AnalyticsFilters>>({
-    dateRange: '30dates',
+    dateRange: '90dates',
     crop_ids: [],
     class_ids: [],
     elevator_ids: [],
     town_ids: [],
     region_ids: [],
   });
+  const [comparisonMode, setComparisonMode] = useState<'single' | 'multi'>('single');
+  const [activeView, setActiveView] = useState<'overview' | 'by-crop' | 'by-location' | 'term-structure'>('overview');
 
   useEffect(() => {
     fetchMetadata();
@@ -28,6 +38,18 @@ export const AnalyticsPage = () => {
 
   const termStructureData = useMemo(() => {
     return transformAnalyticsDataForTermStructure(entries);
+  }, [entries]);
+
+  const timeSeriesData = useMemo(() => {
+    return transformDataForTimeSeries(entries);
+  }, [entries]);
+
+  const cropClassData = useMemo(() => {
+    return transformDataByCropClass(entries);
+  }, [entries]);
+
+  const locationData = useMemo(() => {
+    return transformDataByLocation(entries);
   }, [entries]);
 
   const dateRange = useMemo(() => {
@@ -73,27 +95,152 @@ export const AnalyticsPage = () => {
             classes={classes}
             elevators={elevators}
             towns={towns}
+            comparisonMode={comparisonMode}
+            onComparisonModeChange={setComparisonMode}
           />
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-tg-green" />
+              <h3 className="text-lg font-semibold text-gray-800 mr-4">View</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveView('overview')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    activeView === 'overview'
+                      ? 'bg-tg-green text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Overview
+                </button>
+                <button
+                  onClick={() => setActiveView('by-crop')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    activeView === 'by-crop'
+                      ? 'bg-tg-green text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  By Crop
+                </button>
+                <button
+                  onClick={() => setActiveView('by-location')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    activeView === 'by-location'
+                      ? 'bg-tg-green text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  By Location
+                </button>
+                <button
+                  onClick={() => setActiveView('term-structure')}
+                  className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                    activeView === 'term-structure'
+                      ? 'bg-tg-green text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Term Structure
+                </button>
+              </div>
+            </div>
+          </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-tg-green border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : termStructureData.length > 0 ? (
+          ) : entries.length > 0 ? (
             <div className="space-y-6">
-              {termStructureData.map((cropTermStructure, index) => (
-                <motion.div
-                  key={cropTermStructure.cropClassName}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  <TermStructurePanel
-                    termStructure={cropTermStructure}
-                    defaultExpanded={index === 0}
-                  />
-                </motion.div>
-              ))}
+              {activeView === 'overview' && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <StatisticsSummary entries={entries} />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                  >
+                    <TimeSeriesChart
+                      data={timeSeriesData}
+                      title="Price Trends Over Time"
+                      description="Cash prices, futures, and basis across all selected data"
+                      showFutures={true}
+                      showBasis={true}
+                    />
+                  </motion.div>
+                </>
+              )}
+
+              {activeView === 'by-crop' && (
+                <div className="space-y-6">
+                  {cropClassData.map((cropData, index) => (
+                    <motion.div
+                      key={cropData.cropClassName}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      <TimeSeriesChart
+                        data={cropData.data}
+                        title={`${cropData.cropClassName} - Price Analysis`}
+                        description="Historical price trends by location"
+                        showFutures={true}
+                        showBasis={true}
+                        defaultExpanded={index === 0}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {activeView === 'by-location' && (
+                <div className="space-y-6">
+                  {locationData.map((locData, index) => (
+                    <motion.div
+                      key={locData.locationName}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      <TimeSeriesChart
+                        data={locData.data}
+                        title={`${locData.locationName} - Price Analysis`}
+                        description="Historical price trends for this location"
+                        showFutures={true}
+                        showBasis={true}
+                        defaultExpanded={index === 0}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {activeView === 'term-structure' && (
+                <div className="space-y-6">
+                  {termStructureData.map((cropTermStructure, index) => (
+                    <motion.div
+                      key={cropTermStructure.cropClassName}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      <TermStructurePanel
+                        termStructure={cropTermStructure}
+                        defaultExpanded={index === 0}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">

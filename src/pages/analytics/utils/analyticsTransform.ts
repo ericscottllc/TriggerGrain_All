@@ -134,6 +134,105 @@ export const getDateRange = (entries: GrainEntry[]): { start: string; end: strin
   };
 };
 
+export const transformDataForTimeSeries = (entries: GrainEntry[]) => {
+  const dateMap = new Map<string, Map<string, { cash: number[]; futures: number[]; basis: number[] }>>();
+
+  entries.forEach(entry => {
+    const date = entry.date;
+    const locationKey = `${entry.master_elevators?.name || 'Unknown'} - ${entry.master_towns?.name || 'Unknown'}`;
+
+    if (!dateMap.has(date)) {
+      dateMap.set(date, new Map());
+    }
+
+    const dateData = dateMap.get(date)!;
+    if (!dateData.has(locationKey)) {
+      dateData.set(locationKey, { cash: [], futures: [], basis: [] });
+    }
+
+    const locationData = dateData.get(locationKey)!;
+    if (entry.cash_price !== null) locationData.cash.push(entry.cash_price);
+    if (entry.futures !== null) locationData.futures.push(entry.futures);
+    if (entry.basis !== null) locationData.basis.push(entry.basis);
+  });
+
+  const allDates = Array.from(dateMap.keys()).sort();
+  const allLocations = new Set<string>();
+  dateMap.forEach(dateData => {
+    dateData.forEach((_, location) => allLocations.add(location));
+  });
+
+  const chartData = allDates.map(date => {
+    const dataPoint: ChartDataPoint = { date };
+    const dateData = dateMap.get(date)!;
+
+    allLocations.forEach(location => {
+      const locationData = dateData.get(location);
+      if (locationData) {
+        const avgCash = locationData.cash.length > 0
+          ? locationData.cash.reduce((a, b) => a + b, 0) / locationData.cash.length
+          : null;
+        const avgFutures = locationData.futures.length > 0
+          ? locationData.futures.reduce((a, b) => a + b, 0) / locationData.futures.length
+          : null;
+        const avgBasis = locationData.basis.length > 0
+          ? locationData.basis.reduce((a, b) => a + b, 0) / locationData.basis.length
+          : null;
+
+        dataPoint[`${location}_price`] = avgCash;
+        dataPoint[`${location}_futures`] = avgFutures;
+        dataPoint[`${location}_basis`] = avgBasis;
+      }
+    });
+
+    return dataPoint;
+  });
+
+  return chartData;
+};
+
+export const transformDataByCropClass = (entries: GrainEntry[]) => {
+  const cropClassGroups = new Map<string, GrainEntry[]>();
+
+  entries.forEach(entry => {
+    const className = entry.crop_classes?.name || 'Unknown';
+    if (!cropClassGroups.has(className)) {
+      cropClassGroups.set(className, []);
+    }
+    cropClassGroups.get(className)!.push(entry);
+  });
+
+  const result: Array<{ cropClassName: string; data: ChartDataPoint[] }> = [];
+
+  cropClassGroups.forEach((classEntries, className) => {
+    const data = transformDataForTimeSeries(classEntries);
+    result.push({ cropClassName: className, data });
+  });
+
+  return result;
+};
+
+export const transformDataByLocation = (entries: GrainEntry[]) => {
+  const locationGroups = new Map<string, GrainEntry[]>();
+
+  entries.forEach(entry => {
+    const locationKey = `${entry.master_elevators?.name || 'Unknown'} - ${entry.master_towns?.name || 'Unknown'}`;
+    if (!locationGroups.has(locationKey)) {
+      locationGroups.set(locationKey, []);
+    }
+    locationGroups.get(locationKey)!.push(entry);
+  });
+
+  const result: Array<{ locationName: string; data: ChartDataPoint[] }> = [];
+
+  locationGroups.forEach((locationEntries, locationName) => {
+    const data = transformDataForTimeSeries(locationEntries);
+    result.push({ locationName, data });
+  });
+
+  return result;
+};
+
 const MONTH_ORDER: { [key: string]: number } = {
   'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
   'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,

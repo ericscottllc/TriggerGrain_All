@@ -9,6 +9,8 @@ interface AnalyticsFiltersProps {
   classes: CropClass[];
   elevators: MasterElevator[];
   towns: MasterTown[];
+  comparisonMode?: 'single' | 'multi';
+  onComparisonModeChange?: (mode: 'single' | 'multi') => void;
 }
 
 export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
@@ -18,6 +20,8 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
   classes,
   elevators,
   towns,
+  comparisonMode = 'single',
+  onComparisonModeChange,
 }) => {
   const handleDateRangeChange = (dateRange: AnalyticsFilters['dateRange']) => {
     onFiltersChange({ ...filters, dateRange });
@@ -45,9 +49,36 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-tg-green" />
-          <h3 className="text-lg font-semibold text-gray-800">Filters</h3>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-tg-green" />
+            <h3 className="text-lg font-semibold text-gray-800">Filters</h3>
+          </div>
+          {onComparisonModeChange && (
+            <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+              <span className="text-sm font-medium text-gray-700">View Mode:</span>
+              <button
+                onClick={() => onComparisonModeChange('single')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  comparisonMode === 'single'
+                    ? 'bg-tg-green text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Single
+              </button>
+              <button
+                onClick={() => onComparisonModeChange('multi')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  comparisonMode === 'multi'
+                    ? 'bg-tg-green text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Compare
+              </button>
+            </div>
+          )}
         </div>
         <button
           onClick={clearFilters}
@@ -68,6 +99,8 @@ export const AnalyticsFiltersPanel: React.FC<AnalyticsFiltersProps> = ({
             <option value="30dates">Last 30 Dates</option>
             <option value="60dates">Last 60 Dates</option>
             <option value="90dates">Last 90 Dates</option>
+            <option value="180dates">Last 180 Dates</option>
+            <option value="365dates">Last 365 Dates</option>
           </select>
         </div>
 
