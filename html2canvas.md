@@ -181,7 +181,6 @@ html2canvas(element, {
 ---
 
 ## 7. When Not to Use html2canvas
-- If you need pixel-perfect screenshots with unsupported CSS or external resources.
 - If the target element is extremely large and may exceed canvas limits.
 - If capturing protected cross-origin content without proxy.
 - On low-power devices where rendering may be slow or fail.
