@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, Trash2, ChevronUp, ChevronDown, Calendar, MapPin, Building, Brain as Grain, DollarSign, TrendingUp } from 'lucide-react';
 import { Card, Button, Modal } from '../../../components/Shared/SharedComponents';
@@ -6,6 +6,7 @@ import { QueryFilters } from './QueryFilters';
 import { useGrainEntryData } from '../hooks/useGrainEntryData';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotifications } from '../../../contexts/NotificationContext';
+import { getMonthName, getMonthNumber, getMonthYearSortValue } from '../utils/grainEntryUtils';
 import type { QueryFilters as QueryFiltersType } from '../types/grainEntryTypes';
 
 type SortField = 'date' | 'month_year' | 'region' | 'elevator_town' | 'crop' | 'cash_price' | 'futures' | 'basis';
@@ -63,49 +64,15 @@ export const ViewEntriesTab: React.FC = () => {
     loadFilterOptions();
   }, [fetchFilterOptions]);
 
-  // Manual query function
-  const handleQueryEntries = async () => {
+  const handleQueryEntries = useCallback(async () => {
     try {
       await fetchGrainEntries(filters);
       success('Success', `Loaded ${entries.length} grain entries`);
     } catch (err) {
       error('Query Failed', 'Failed to load grain entries');
     }
-  };
+  }, [filters, fetchGrainEntries, success, error, entries.length]);
 
-  // Helper function to get month name from number or string
-  const getMonthName = (month: string | number) => {
-    const monthNames = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    
-    if (typeof month === 'string') {
-      if (monthNames.includes(month)) return month;
-      const monthNum = parseInt(month) - 1;
-      return monthNames[monthNum] || month;
-    }
-    
-    const monthNum = parseInt(month.toString()) - 1;
-    return monthNames[monthNum] || month.toString();
-  };
-
-  // Helper function to get month number from name
-  const getMonthNumber = (monthName: string): number => {
-    const monthNames = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    const index = monthNames.indexOf(monthName);
-    return index !== -1 ? index + 1 : parseInt(monthName) || 1;
-  };
-
-  // Helper function to get month/year sort value
-  const getMonthYearSortValue = (entry: any) => {
-    const year = parseInt(entry.year) || 0;
-    const month = typeof entry.month === 'string' ? getMonthNumber(entry.month) : parseInt(entry.month) || 0;
-    return year * 100 + month;
-  };
 
   // Sort entries
   const sortedEntries = useMemo(() => {
@@ -158,34 +125,31 @@ export const ViewEntriesTab: React.FC = () => {
     });
   }, [entries, sortField, sortDirection]);
 
-  // Handle sort
-  const handleSort = (field: SortField) => {
+  const handleSort = useCallback((field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
       setSortDirection('asc');
     }
-  };
+  }, [sortField, sortDirection]);
 
-  // Show delete confirmation
-  const showDeleteConfirmation = (entry: any) => {
+  const showDeleteConfirmation = useCallback((entry: any) => {
     const entryDetails = `${entry.master_elevators?.name || 'Unknown'} - ${entry.master_towns?.name || 'Unknown'} (${getMonthName(entry.month)} ${entry.year})`;
     setDeleteConfirmation({
       isOpen: true,
       entryId: entry.id,
       entryDetails
     });
-  };
+  }, []);
 
-  // Close delete confirmation
-  const closeDeleteConfirmation = () => {
+  const closeDeleteConfirmation = useCallback(() => {
     setDeleteConfirmation({
       isOpen: false,
       entryId: null,
       entryDetails: ''
     });
-  };
+  }, []);
 
   // Confirm delete
   const confirmDelete = async () => {

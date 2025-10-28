@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button } from '../../../components/Shared/SharedComponents';
 import { Plus, Trash2 } from 'lucide-react';
+import { formatCurrency, getBasisColor } from '../utils/grainEntryUtils';
 import type { GrainEntryRow, MonthYearColumn, ElevatorTownPair } from '../types/grainEntryTypes';
 
 interface GrainEntryTableProps {
@@ -16,7 +17,7 @@ interface GrainEntryTableProps {
   allowManualEntry: boolean;
 }
 
-export const GrainEntryTable: React.FC<GrainEntryTableProps> = ({
+export const GrainEntryTable: React.FC<GrainEntryTableProps> = React.memo(({
   entries,
   monthYearColumns,
   availableElevatorTownPairs,
@@ -28,17 +29,12 @@ export const GrainEntryTable: React.FC<GrainEntryTableProps> = ({
   onRemoveEntry,
   allowManualEntry
 }) => {
-  const formatCurrency = (value: number | null) => {
-    if (value === null || isNaN(value)) return '';
-    return value.toFixed(2);
-  };
-
-  const getBasisColor = (basis: number | null) => {
-    if (basis === null || isNaN(basis)) return 'text-gray-400';
-    if (basis > 0) return 'text-green-600';
-    if (basis < 0) return 'text-red-600';
-    return 'text-gray-600';
-  };
+  const uniqueElevators = useMemo(() => {
+    return Array.from(new Set(availableElevatorTownPairs.map(pair => pair.elevator_id)))
+      .map(elevatorId => availableElevatorTownPairs.find(p => p.elevator_id === elevatorId))
+      .filter(Boolean)
+      .sort((a, b) => (a?.elevator_name || '').localeCompare(b?.elevator_name || ''));
+  }, [availableElevatorTownPairs]);
 
   const handleMonthYearChange = (columnId: string, field: 'month' | 'year', value: string) => {
     const column = monthYearColumns.find(col => col.id === columnId);
@@ -236,20 +232,11 @@ export const GrainEntryTable: React.FC<GrainEntryTableProps> = ({
                         className="w-full px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-tg-primary/20 focus:border-tg-primary"
                       >
                         <option value="">Select Elevator</option>
-                        {Array.from(new Set(availableElevatorTownPairs.map(pair => pair.elevator_id)))
-                          .map(elevatorId => availableElevatorTownPairs.find(p => p.elevator_id === elevatorId))
-                          .filter(Boolean)
-                          .sort((a, b) => (a?.elevator_name || '').localeCompare(b?.elevator_name || ''))
-                          .map(elevatorId => {
-                            const pair = typeof elevatorId === 'string' ? 
-                              availableElevatorTownPairs.find(p => p.elevator_id === elevatorId) : 
-                              elevatorId;
-                            return (
-                              <option key={pair?.elevator_id} value={pair?.elevator_id}>
-                                {pair?.elevator_name}
-                              </option>
-                            );
-                          })}
+                        {uniqueElevators.map(pair => (
+                          <option key={pair?.elevator_id} value={pair?.elevator_id}>
+                            {pair?.elevator_name}
+                          </option>
+                        ))}
                       </select>
                     ) : (
                       <span className="text-sm font-medium text-gray-800">{entry.elevatorName}</span>
@@ -331,4 +318,4 @@ export const GrainEntryTable: React.FC<GrainEntryTableProps> = ({
       </div>
     </div>
   );
-};
+});

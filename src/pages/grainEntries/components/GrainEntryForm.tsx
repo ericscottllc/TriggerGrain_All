@@ -44,21 +44,27 @@ export const GrainEntryForm: React.FC<GrainEntryFormProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Crop Class *
           </label>
-          <div className="flex flex-wrap gap-2">
-            {cropClasses.map((cropClass) => (
-              <Button
-                key={cropClass.id}
-                variant={formData.cropClassId === cropClass.id ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => handleInputChange('cropClassId', cropClass.id)}
-                disabled={loading}
-                className="text-xs"
-              >
-                {cropClass.code || cropClass.name}
-              </Button>
-            ))}
-          </div>
-          {formData.cropClassId && (
+          {loading ? (
+            <div className="text-sm text-gray-500">Loading crop classes...</div>
+          ) : cropClasses.length === 0 ? (
+            <div className="text-sm text-gray-500">No crop classes available</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {cropClasses.map((cropClass) => (
+                <Button
+                  key={cropClass.id}
+                  variant={formData.cropClassId === cropClass.id ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleInputChange('cropClassId', cropClass.id)}
+                  disabled={loading}
+                  className="text-xs"
+                >
+                  {cropClass.code || cropClass.name}
+                </Button>
+              ))}
+            </div>
+          )}
+          {formData.cropClassId && cropClasses.length > 0 && (
             <div className="mt-2 text-xs text-gray-600">
               Selected: {cropClasses.find(c => c.id === formData.cropClassId)?.name}
             </div>
@@ -70,30 +76,38 @@ export const GrainEntryForm: React.FC<GrainEntryFormProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Region
           </label>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={formData.regionId === '' ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => handleInputChange('regionId', '')}
-              disabled={loading}
-              className="text-xs"
-            >
-              None
-            </Button>
-            {regions.map((region) => (
+          {loading ? (
+            <div className="text-sm text-gray-500">Loading regions...</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
               <Button
-                key={region.id}
-                variant={formData.regionId === region.id ? 'primary' : 'outline'}
+                variant={formData.regionId === '' ? 'primary' : 'outline'}
                 size="sm"
-                onClick={() => handleInputChange('regionId', region.id)}
+                onClick={() => handleInputChange('regionId', '')}
                 disabled={loading}
                 className="text-xs"
               >
-                {region.name}
+                None
               </Button>
-            ))}
-          </div>
-          {formData.regionId && (
+              {regions.length === 0 ? (
+                <span className="text-sm text-gray-500">No regions available</span>
+              ) : (
+                regions.map((region) => (
+                  <Button
+                    key={region.id}
+                    variant={formData.regionId === region.id ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => handleInputChange('regionId', region.id)}
+                    disabled={loading}
+                    className="text-xs"
+                  >
+                    {region.name}
+                  </Button>
+                ))
+              )}
+            </div>
+          )}
+          {formData.regionId && regions.length > 0 && (
             <div className="mt-2 text-xs text-gray-600">
               Selected: {regions.find(r => r.id === formData.regionId)?.name}
               {formData.cropClassId && (

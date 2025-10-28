@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Plus, Trash2, Calendar, MapPin } from 'lucide-react';
 import { Button, Input, Card } from '../../../components/Shared/SharedComponents';
@@ -6,6 +6,7 @@ import { useNotifications } from '../../../contexts/NotificationContext';
 import { GrainEntryForm } from './GrainEntryForm';
 import { GrainEntryTable } from './GrainEntryTable';
 import { useGrainEntryData } from '../hooks/useGrainEntryData';
+import { initializeMonthYearColumns, updateSubsequentMonths, calculateBasis, sortElevatorTownPairs } from '../utils/grainEntryUtils';
 import type { GrainEntryRow, GrainEntryFormData, MonthYearColumn } from '../types/grainEntryTypes';
 
 export const NewEntriesTab: React.FC = () => {
@@ -27,30 +28,7 @@ export const NewEntriesTab: React.FC = () => {
     regionId: ''
   });
 
-  // Initialize 6 month/year columns starting from current month
-  const initializeMonthYearColumns = (): MonthYearColumn[] => {
-    const currentDate = new Date();
-    const columns: MonthYearColumn[] = [];
-    
-    for (let i = 0; i < 6; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-      const month = date.getMonth() + 1;
-      const year = date.getFullYear();
-      const monthName = date.toLocaleString('default', { month: 'short' });
-      
-      columns.push({
-        id: `month-${i}`,
-        month,
-        year,
-        monthName,
-        futuresPrice: ''
-      });
-    }
-    
-    return columns;
-  };
-
-  const [monthYearColumns, setMonthYearColumns] = useState<MonthYearColumn[]>(initializeMonthYearColumns);
+  const [monthYearColumns, setMonthYearColumns] = useState<MonthYearColumn[]>(() => initializeMonthYearColumns(6));
   const [entryRows, setEntryRows] = useState<GrainEntryRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [deletedRowIds, setDeletedRowIds] = useState<Set<string>>(new Set());
@@ -93,33 +71,25 @@ export const NewEntriesTab: React.FC = () => {
     setDeletedRowIds(new Set());
   }, [formData.regionId, formData.cropClassId]);
 
-  const generateEntryRows = () => {
+  const generateEntryRows = useCallback(() => {
     const rows: GrainEntryRow[] = [];
-
-    // Sort elevator town pairs before generating rows
-    const sortedPairs = [...elevatorTownPairs].sort((a, b) => {
-      const elevatorCompare = a.elevator_name.localeCompare(b.elevator_name);
-      if (elevatorCompare !== 0) return elevatorCompare;
-      return a.town_name.localeCompare(b.town_name);
-    });
+    const sortedPairs = sortElevatorTownPairs(elevatorTownPairs);
 
     sortedPairs.forEach((pair) => {
       const rowId = `${pair.elevator_id}-${pair.town_id}`;
-      
-      // Skip if this row was manually deleted
+
       if (deletedRowIds.has(rowId)) {
         return;
       }
-      
+
       const cashPrices: { [monthYearId: string]: string } = {};
       const basis: { [monthYearId: string]: number | null } = {};
-      
-      // Initialize empty values for each month/year column
+
       monthYearColumns.forEach(column => {
         cashPrices[column.id] = '';
         basis[column.id] = null;
       });
-      
+
       rows.push({
         id: rowId,
         elevatorId: pair.elevator_id,
@@ -132,61 +102,31 @@ export const NewEntriesTab: React.FC = () => {
     });
 
     setEntryRows(rows);
-  };
+  }, [elevatorTownPairs, deletedRowIds, monthYearColumns]);
 
-  const handleMonthYearChange = (columnId: string, month: number, year: number) => {
-    setMonthYearColumns(prev => prev.map(col => {
-      if (col.id === columnId) {
-        const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'short' });
-        return { ...col, month, year, monthName };
-      }
-      return col;
-    }));
-    
-    // Auto-populate subsequent columns
+  const handleMonthYearChange = useCallback((columnId: string, month: number, year: number) => {
     setMonthYearColumns(prev => {
-      const columnIndex = prev.findIndex(c => c.id === columnId);
-      if (columnIndex === -1) return prev;
-      
-      const newColumns = [...prev];
-      
-      // Update subsequent columns
-      for (let i = columnIndex + 1; i < newColumns.length; i++) {
-        const monthsToAdd = i - columnIndex;
-        const baseDate = new Date(year, month - 1, 1);
-        const nextDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthsToAdd, 1);
-        const nextMonth = nextDate.getMonth() + 1;
-        const nextYear = nextDate.getFullYear();
-        const nextMonthName = nextDate.toLocaleString('default', { month: 'short' });
-        
-        newColumns[i] = {
-          ...newColumns[i],
-          month: nextMonth,
-          year: nextYear,
-          monthName: nextMonthName
-        };
-      }
-      
-      return newColumns;
-    });
-  };
+      const updatedColumns = prev.map(col => {
+        if (col.id === columnId) {
+          const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'short' });
+          return { ...col, month, year, monthName };
+        }
+        return col;
+      });
 
-  const handleFuturesPriceChange = (columnId: string, price: string) => {
-    setMonthYearColumns(prev => prev.map(col => 
+      return updateSubsequentMonths(updatedColumns, columnId, month, year);
+    });
+  }, []);
+
+  const handleFuturesPriceChange = useCallback((columnId: string, price: string) => {
+    setMonthYearColumns(prev => prev.map(col =>
       col.id === columnId ? { ...col, futuresPrice: price } : col
     ));
-    
-    // Recalculate basis for all entries for this column
-    updateBasisForColumn(columnId, price);
-  };
 
-  const updateBasisForColumn = (columnId: string, futuresPrice: string) => {
     setEntryRows(prev => prev.map(row => {
-      const cashPrice = parseFloat(row.cashPrices[columnId] || '');
-      const futures = parseFloat(futuresPrice || '');
-      
-      const newBasis = !isNaN(cashPrice) && !isNaN(futures) ? cashPrice - futures : null;
-      
+      const cashPrice = row.cashPrices[columnId] || '';
+      const newBasis = calculateBasis(cashPrice, price);
+
       return {
         ...row,
         basis: {
@@ -195,42 +135,34 @@ export const NewEntriesTab: React.FC = () => {
         }
       };
     }));
-  };
+  }, []);
 
-  const handleCashPriceChange = (entryId: string, monthYearId: string, value: string) => {
+  const handleCashPriceChange = useCallback((entryId: string, monthYearId: string, value: string) => {
     setEntryRows(prev => prev.map(row => {
       if (row.id === entryId) {
-        const updatedCashPrices = { ...row.cashPrices, [monthYearId]: value };
-        
-        // Calculate basis
         const column = monthYearColumns.find(col => col.id === monthYearId);
-        const cashPrice = parseFloat(value || '');
-        const futures = parseFloat(column?.futuresPrice || '');
-        const newBasis = !isNaN(cashPrice) && !isNaN(futures) ? cashPrice - futures : null;
-        
+        const newBasis = calculateBasis(value, column?.futuresPrice || '');
+
         return {
           ...row,
-          cashPrices: updatedCashPrices,
-          basis: {
-            ...row.basis,
-            [monthYearId]: newBasis
-          }
+          cashPrices: { ...row.cashPrices, [monthYearId]: value },
+          basis: { ...row.basis, [monthYearId]: newBasis }
         };
       }
       return row;
     }));
-  };
+  }, [monthYearColumns]);
 
-  const handleAddManualEntry = () => {
+  const handleAddManualEntry = useCallback(() => {
     const newId = `manual-${Date.now()}`;
     const cashPrices: { [monthYearId: string]: string } = {};
     const basis: { [monthYearId: string]: number | null } = {};
-    
+
     monthYearColumns.forEach(column => {
       cashPrices[column.id] = '';
       basis[column.id] = null;
     });
-    
+
     const newEntry: GrainEntryRow = {
       id: newId,
       elevatorId: '',
@@ -240,17 +172,17 @@ export const NewEntriesTab: React.FC = () => {
       cashPrices,
       basis
     };
-    
-    setEntryRows(prev => [...prev, newEntry]);
-  };
 
-  const handleUpdateElevatorTown = (entryId: string, elevatorId: string, townId: string) => {
+    setEntryRows(prev => [...prev, newEntry]);
+  }, [monthYearColumns]);
+
+  const handleUpdateElevatorTown = useCallback((entryId: string, elevatorId: string, townId: string) => {
     setEntryRows(prev => prev.map(row => {
       if (row.id === entryId) {
-        const elevatorPair = elevatorTownPairs.find(pair => 
+        const elevatorPair = elevatorTownPairs.find(pair =>
           pair.elevator_id === elevatorId && pair.town_id === townId
         );
-        
+
         return {
           ...row,
           elevatorId,
@@ -261,14 +193,12 @@ export const NewEntriesTab: React.FC = () => {
       }
       return row;
     }));
-  };
-  const handleRemoveEntry = (entryId: string) => {
-    // Remove from current rows
+  }, [elevatorTownPairs]);
+
+  const handleRemoveEntry = useCallback((entryId: string) => {
     setEntryRows(prev => prev.filter(row => row.id !== entryId));
-    
-    // Add to deleted rows set to prevent regeneration
     setDeletedRowIds(prev => new Set([...prev, entryId]));
-  };
+  }, []);
 
   const handleSaveEntries = async () => {
     if (!formData.cropClassId) {
