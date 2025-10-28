@@ -36,13 +36,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     color: 'tg-coral'
   },
   {
-    id: 'references',
-    title: 'References',
-    icon_name: 'BookOpen',
-    path: '/references',
-    color: 'tg-coral'
-  },
-  {
     id: 'analytics',
     title: 'Analytics',
     icon_name: 'TrendingUp',
