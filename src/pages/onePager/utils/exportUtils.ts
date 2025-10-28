@@ -1,40 +1,63 @@
 import { EXPORT_CONFIG } from './constants';
 
-const loadImages = async (element: HTMLElement): Promise<void> => {
-  const images = element.querySelectorAll('img');
-  console.log(`Loading ${images.length} images for export...`);
+const convertImageToDataURL = async (img: HTMLImageElement): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
 
-  await Promise.all(Array.from(images).map((img, index) => {
-    if (img.complete && img.naturalHeight !== 0) {
-      console.log(`Image ${index + 1} already loaded:`, img.src);
-      return Promise.resolve();
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
     }
 
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        console.warn(`Image ${index + 1} load timeout:`, img.src);
-        resolve();
-      }, EXPORT_CONFIG.IMAGE_TIMEOUT);
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
 
-      img.onload = () => {
-        clearTimeout(timeout);
-        console.log(`Image ${index + 1} loaded successfully:`, img.src);
-        resolve();
-      };
+    const tempImg = new Image();
+    tempImg.crossOrigin = 'anonymous';
 
-      img.onerror = (error) => {
-        clearTimeout(timeout);
-        console.error(`Image ${index + 1} failed to load:`, img.src, error);
-        resolve();
-      };
-
-      if (img.src.startsWith('/')) {
-        img.src = window.location.origin + img.src;
+    tempImg.onload = () => {
+      ctx.drawImage(tempImg, 0, 0);
+      try {
+        const dataURL = canvas.toDataURL('image/png');
+        resolve(dataURL);
+      } catch (error) {
+        console.error('Error converting to data URL:', error);
+        reject(error);
       }
-    });
-  }));
+    };
 
-  console.log('All images processed');
+    tempImg.onerror = (error) => {
+      console.error('Error loading image for conversion:', error);
+      reject(error);
+    };
+
+    const originalSrc = img.getAttribute('src') || img.src;
+    if (originalSrc.startsWith('/')) {
+      tempImg.src = window.location.origin + originalSrc;
+    } else {
+      tempImg.src = originalSrc;
+    }
+  });
+};
+
+const loadImages = async (element: HTMLElement): Promise<void> => {
+  const images = element.querySelectorAll('img');
+  console.log(`Converting ${images.length} images to data URLs for export...`);
+
+  const imagePromises = Array.from(images).map(async (img, index) => {
+    try {
+      console.log(`Converting image ${index + 1}:`, img.src);
+      const dataURL = await convertImageToDataURL(img);
+      img.src = dataURL;
+      console.log(`Image ${index + 1} converted successfully`);
+    } catch (error) {
+      console.error(`Failed to convert image ${index + 1}:`, error);
+    }
+  });
+
+  await Promise.all(imagePromises);
+  console.log('All images converted to data URLs');
 };
 
 const createCloneForExport = (element: HTMLElement): HTMLElement => {
@@ -71,16 +94,16 @@ const captureCanvas = async (element: HTMLElement): Promise<HTMLCanvasElement> =
 
   const canvas = await html2canvas(element, {
     scale: EXPORT_CONFIG.SCALE_FACTOR,
-    useCORS: true,
-    allowTaint: false,
-    foreignObjectRendering: true,
+    useCORS: false,
+    allowTaint: true,
+    foreignObjectRendering: false,
     backgroundColor: EXPORT_CONFIG.BACKGROUND_COLOR,
     width: EXPORT_CONFIG.PAGE_WIDTH_PIXELS,
     height: element.scrollHeight,
     scrollX: 0,
     scrollY: 0,
     logging: true,
-    imageTimeout: EXPORT_CONFIG.IMAGE_TIMEOUT,
+    imageTimeout: 0,
     removeContainer: true,
     onclone: (clonedDoc) => {
       console.log('Document cloned for rendering');
