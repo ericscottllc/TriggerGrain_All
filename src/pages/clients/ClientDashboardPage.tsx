@@ -147,81 +147,83 @@ export const ClientDashboardPage: React.FC = () => {
 
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setShowElevators(!showElevators)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-tg-green" />
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Associated Elevators ({client.elevator_count || 0})
-                </h2>
-              </div>
-              {showElevators ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-            </button>
-            {showElevators && (
-              <div className="p-4 border-t border-gray-200">
-                {client.client_elevators && client.client_elevators.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    {client.client_elevators
-                      .filter(ce => ce.is_active)
-                      .map(ce => (
-                        <div
-                          key={ce.id}
-                          className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg"
-                        >
-                          <Building2 className="w-4 h-4 text-blue-600" />
-                          <span className="text-sm font-medium text-gray-900">
-                            {ce.master_elevators?.name}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-center py-4">No elevators associated</p>
-                )}
-              </div>
-            )}
-          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setShowElevators(!showElevators)}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Building2 className="w-5 h-5 text-tg-green" />
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Associated Elevators ({client.elevator_count || 0})
+                  </h2>
+                </div>
+                {showElevators ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              </button>
+              {showElevators && (
+                <div className="p-4 border-t border-gray-200">
+                  {client.client_elevators && client.client_elevators.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {client.client_elevators
+                        .filter(ce => ce.is_active)
+                        .map(ce => (
+                          <div
+                            key={ce.id}
+                            className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg"
+                          >
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm font-medium text-gray-900">
+                              {ce.master_elevators?.name}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No elevators associated</p>
+                  )}
+                </div>
+              )}
+            </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setShowTowns(!showTowns)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-tg-green" />
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Associated Towns ({client.town_count || 0})
-                </h2>
-              </div>
-              {showTowns ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-            </button>
-            {showTowns && (
-              <div className="p-4 border-t border-gray-200">
-                {client.client_towns && client.client_towns.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    {client.client_towns
-                      .filter(ct => ct.is_active)
-                      .map(ct => (
-                        <div
-                          key={ct.id}
-                          className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg"
-                        >
-                          <MapPin className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-medium text-gray-900">
-                            {ct.master_towns?.name}
-                            {ct.master_towns?.province && `, ${ct.master_towns.province}`}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-center py-4">No towns associated</p>
-                )}
-              </div>
-            )}
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setShowTowns(!showTowns)}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5 text-tg-green" />
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Associated Towns ({client.town_count || 0})
+                  </h2>
+                </div>
+                {showTowns ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              </button>
+              {showTowns && (
+                <div className="p-4 border-t border-gray-200">
+                  {client.client_towns && client.client_towns.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {client.client_towns
+                        .filter(ct => ct.is_active)
+                        .map(ct => (
+                          <div
+                            key={ct.id}
+                            className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg"
+                          >
+                            <MapPin className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-medium text-gray-900">
+                              {ct.master_towns?.name}
+                              {ct.master_towns?.province && `, ${ct.master_towns.province}`}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No towns associated</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
