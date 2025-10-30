@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import { withAuthRetry } from '../../../utils/retryUtils';
 import type {
   Scenario,
   ScenarioWithStats,
@@ -57,7 +58,7 @@ export function useScenarioData() {
         query = query.lte('end_date', filters.dateTo);
       }
 
-      const { data, error: fetchError } = await query;
+      const { data, error: fetchError } = await withAuthRetry(() => query);
 
       if (fetchError) throw fetchError;
 
@@ -148,18 +149,20 @@ export function useScenarioData() {
     if (!user) return null;
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('scenarios')
-        .select(`
-          *,
-          master_crops(name),
-          crop_classes(name),
-          master_regions(name),
-          master_towns(name),
-          master_elevators(name)
-        `)
-        .eq('id', scenarioId)
-        .maybeSingle();
+      const { data, error: fetchError } = await withAuthRetry(() =>
+        supabase
+          .from('scenarios')
+          .select(`
+            *,
+            master_crops(name),
+            crop_classes(name),
+            master_regions(name),
+            master_towns(name),
+            master_elevators(name)
+          `)
+          .eq('id', scenarioId)
+          .maybeSingle()
+      );
 
       if (fetchError) throw fetchError;
       if (!data) return null;

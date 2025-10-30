@@ -40,6 +40,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isInitializedRef = useRef(false);
   const mountedRef = useRef(true);
   const fetchingProfileRef = useRef(false);
+  const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastVisibilityCheckRef = useRef<number>(Date.now());
+  const isRecoveringSessionRef = useRef(false);
 
   const fetchUserProfile = useCallback(async (userId: string, retryCount = 0): Promise<UserProfile | null> => {
     console.log('[AuthContext] fetchUserProfile called for:', userId);
@@ -154,6 +157,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('[AuthContext] Exception refreshing session:', error);
     }
   }, [fetchUserProfile]);
+
+  const checkAndRecoverSession = useCallback(async () => {
+    if (isRecoveringSessionRef.current) {
+      console.log('[AuthContext] Session recovery already in progress, skipping');
+      return;
+    }
+
+    isRecoveringSessionRef.current = true;
+    console.log('[AuthContext] Checking and recovering session...');
+
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('[AuthContext] Error getting session:', error);
+        if (mountedRef.current) {
+          setUser(null);
+          setUserProfile(null);
+          localStorage.removeItem('userProfile');
+        }
+        return;
+      }
+
+      if (!session) {
+        console.log('[AuthContext] No session found during recovery check');
+        if (mountedRef.current) {
+          setUser(null);
+          setUserProfile(null);
+          localStorage.removeItem('userProfile');
+        }
+        return;
+      }
+
+      const isValid = await validateSession(session);
+      if (!isValid) {
+        console.warn('[AuthContext] Session invalid during recovery, attempting refresh...');
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshedSession) {
+          console.error('[AuthContext] Failed to refresh session during recovery:', refreshError);
+          if (mountedRef.current) {
+            setUser(null);
+            setUserProfile(null);
+            localStorage.removeItem('userProfile');
+          }
+          return;
+        }
+
+        console.log('[AuthContext] Session refreshed successfully during recovery');
+        if (mountedRef.current) {
+          setUser(refreshedSession.user);
+          const profile = await fetchUserProfile(refreshedSession.user.id);
+          if (mountedRef.current) {
+            setUserProfile(profile);
+          }
+        }
+        return;
+      }
+
+      console.log('[AuthContext] Session valid, ensuring user state is current');
+      if (mountedRef.current && (!user || user.id !== session.user.id)) {
+        setUser(session.user);
+        const profile = await fetchUserProfile(session.user.id);
+        if (mountedRef.current) {
+          setUserProfile(profile);
+        }
+      }
+    } catch (error) {
+      console.error('[AuthContext] Exception during session recovery:', error);
+    } finally {
+      isRecoveringSessionRef.current = false;
+    }
+  }, [user, validateSession, fetchUserProfile]);
 
   const validateSession = useCallback(async (session: Session): Promise<boolean> => {
     if (!session || !session.access_token) {
@@ -300,12 +376,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('[AuthContext] Tab became hidden');
+        lastVisibilityCheckRef.current = Date.now();
+        if (sessionCheckIntervalRef.current) {
+          clearInterval(sessionCheckIntervalRef.current);
+          sessionCheckIntervalRef.current = null;
+        }
+      } else {
+        console.log('[AuthContext] Tab became visible');
+        const timeSinceLastCheck = Date.now() - lastVisibilityCheckRef.current;
+        console.log(`[AuthContext] Time since last visibility check: ${Math.floor(timeSinceLastCheck / 1000)}s`);
+
+        if (timeSinceLastCheck > 30000) {
+          console.log('[AuthContext] Been away for more than 30 seconds, checking session...');
+          checkAndRecoverSession();
+        }
+
+        if (!sessionCheckIntervalRef.current) {
+          sessionCheckIntervalRef.current = setInterval(() => {
+            if (!document.hidden && user) {
+              console.log('[AuthContext] Periodic session check');
+              checkAndRecoverSession();
+            }
+          }, 5 * 60 * 1000);
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      console.log('[AuthContext] Window gained focus');
+      const timeSinceLastCheck = Date.now() - lastVisibilityCheckRef.current;
+      if (timeSinceLastCheck > 10000) {
+        console.log('[AuthContext] Checking session after focus...');
+        checkAndRecoverSession();
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.includes('supabase.auth.token')) {
+        console.log('[AuthContext] Supabase auth storage changed in another tab');
+        checkAndRecoverSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorageChange);
+
+    sessionCheckIntervalRef.current = setInterval(() => {
+      if (!document.hidden && user) {
+        console.log('[AuthContext] Periodic session check');
+        checkAndRecoverSession();
+      }
+    }, 5 * 60 * 1000);
+
     return () => {
       console.log('[AuthContext] Cleaning up auth listener');
       mountedRef.current = false;
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorageChange);
+      if (sessionCheckIntervalRef.current) {
+        clearInterval(sessionCheckIntervalRef.current);
+        sessionCheckIntervalRef.current = null;
+      }
     };
-  }, [handleAuthStateChange]);
+  }, [handleAuthStateChange, checkAndRecoverSession, user]);
 
   const signInWithEmail = async (email: string, password: string) => {
     console.log('[AuthContext] signInWithEmail called for:', email);

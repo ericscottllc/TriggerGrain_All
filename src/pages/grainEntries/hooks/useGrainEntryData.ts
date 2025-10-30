@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { sortElevatorTownPairs } from '../utils/grainEntryUtils';
+import { withAuthRetry } from '../../../utils/retryUtils';
 import type {
   CropClass,
   Region,
@@ -49,11 +50,13 @@ export const useGrainEntryData = () => {
   const fetchCropClasses = useCallback(async () => {
     try {
       console.log('[fetchCropClasses] Starting fetch...');
-      const { data, error } = await supabase
-        .from('crop_classes')
-        .select('id, name, code, crop_id')
-        .eq('is_active', true)
-        .order('name');
+      const { data, error } = await withAuthRetry(() =>
+        supabase
+          .from('crop_classes')
+          .select('id, name, code, crop_id')
+          .eq('is_active', true)
+          .order('name')
+      );
 
       if (error) {
         console.error('[fetchCropClasses] Error:', error);
@@ -73,11 +76,13 @@ export const useGrainEntryData = () => {
   const fetchRegions = useCallback(async (cropClassId?: string) => {
     try {
       console.log('[fetchRegions] Starting fetch...');
-      const { data, error } = await supabase
-        .from('master_regions')
-        .select('id, name, code')
-        .eq('is_active', true)
-        .order('name');
+      const { data, error } = await withAuthRetry(() =>
+        supabase
+          .from('master_regions')
+          .select('id, name, code')
+          .eq('is_active', true)
+          .order('name')
+      );
 
       if (error) {
         console.error('[fetchRegions] Error:', error);
