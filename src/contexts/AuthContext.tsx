@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { User, AuthError } from '@supabase/supabase-js';
+import { User, AuthError, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
 interface UserProfile {
@@ -20,6 +20,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, fullName?: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,28 +58,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('[AuthContext] Error fetching user profile:', error);
+        console.error('[AuthContext] Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
 
-        if (retryCount < 2) {
-          console.log(`[AuthContext] Retrying profile fetch (attempt ${retryCount + 2}/3)...`);
+        if (error.code === 'PGRST202') {
+          console.error('[AuthContext] CRITICAL: get_user_info function not found in database!');
+          console.error('[AuthContext] This usually means the database migration has not been applied.');
+          console.error('[AuthContext] Please ensure all Supabase migrations are up to date.');
+        }
+
+        if (retryCount < 3) {
+          const delayMs = Math.min(1000 * Math.pow(2, retryCount), 5000);
+          console.log(`[AuthContext] Retrying profile fetch in ${delayMs}ms (attempt ${retryCount + 2}/4)...`);
           fetchingProfileRef.current = false;
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, delayMs));
           return fetchUserProfile(userId, retryCount + 1);
         }
 
+        console.error('[AuthContext] Max retries reached, profile fetch failed permanently');
         return null;
       }
 
       if (data) {
-        const profile = {
+        const profile: UserProfile = {
           id: userId,
-          email: data.user_email,
-          full_name: data.user_email,
-          status: data.user_status,
+          email: data.user_email || '',
+          full_name: data.user_email || 'Unknown User',
+          status: data.user_status || 'pending',
           is_active: data.user_status === 'active',
           role_name: data.role_name || 'Pending',
           is_admin: data.is_admin || false
         };
         console.log('[AuthContext] Successfully fetched profile:', profile);
+
+        try {
+          localStorage.setItem('userProfile', JSON.stringify(profile));
+          console.log('[AuthContext] Profile cached to localStorage');
+        } catch (storageError) {
+          console.warn('[AuthContext] Failed to cache profile to localStorage:', storageError);
+        }
+
         return profile;
       }
       console.log('[AuthContext] No profile data returned');
@@ -86,13 +109,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('[AuthContext] Exception fetching user profile:', error);
 
-      if (retryCount < 2) {
-        console.log(`[AuthContext] Retrying after exception (attempt ${retryCount + 2}/3)...`);
+      if (retryCount < 3) {
+        const delayMs = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        console.log(`[AuthContext] Retrying after exception in ${delayMs}ms (attempt ${retryCount + 2}/4)...`);
         fetchingProfileRef.current = false;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         return fetchUserProfile(userId, retryCount + 1);
       }
 
+      console.error('[AuthContext] Max retries reached after exception, profile fetch failed permanently');
       return null;
     } finally {
       fetchingProfileRef.current = false;
@@ -109,14 +134,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, fetchUserProfile]);
 
-  const handleAuthStateChange = useCallback(async (session: any) => {
+  const refreshSession = useCallback(async () => {
+    console.log('[AuthContext] Manually refreshing session');
+    try {
+      const { data: { session }, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('[AuthContext] Error refreshing session:', error);
+        return;
+      }
+      if (session) {
+        console.log('[AuthContext] Session refreshed successfully');
+        setUser(session.user);
+        const profile = await fetchUserProfile(session.user.id);
+        if (mountedRef.current) {
+          setUserProfile(profile);
+        }
+      }
+    } catch (error) {
+      console.error('[AuthContext] Exception refreshing session:', error);
+    }
+  }, [fetchUserProfile]);
+
+  const validateSession = useCallback(async (session: Session): Promise<boolean> => {
+    if (!session || !session.access_token) {
+      console.log('[AuthContext] Invalid session: missing access token');
+      return false;
+    }
+
+    const expiresAt = session.expires_at;
+    if (expiresAt) {
+      const expiryTime = expiresAt * 1000;
+      const now = Date.now();
+      const timeUntilExpiry = expiryTime - now;
+
+      console.log('[AuthContext] Session expires in:', Math.floor(timeUntilExpiry / 1000 / 60), 'minutes');
+
+      if (timeUntilExpiry < 5 * 60 * 1000) {
+        console.log('[AuthContext] Session expiring soon, refreshing...');
+        try {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.error('[AuthContext] Failed to refresh expiring session:', error);
+            return false;
+          }
+          if (data.session) {
+            console.log('[AuthContext] Session refreshed successfully');
+            return true;
+          }
+        } catch (error) {
+          console.error('[AuthContext] Exception refreshing session:', error);
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }, []);
+
+  const handleAuthStateChange = useCallback(async (session: Session | null) => {
     console.log('[AuthContext] handleAuthStateChange called, session:', !!session);
 
     if (session?.user) {
       console.log('[AuthContext] Session has user:', session.user.email);
+
+      const isValid = await validateSession(session);
+      if (!isValid) {
+        console.error('[AuthContext] Session validation failed, signing out');
+        if (mountedRef.current) {
+          setUser(null);
+          setUserProfile(null);
+          setLoading(false);
+          localStorage.removeItem('userProfile');
+        }
+        return;
+      }
+
       if (mountedRef.current) {
         setUser(session.user);
-        const profile = await fetchUserProfile(session.user.id);
+
+        let profile = await fetchUserProfile(session.user.id);
+
+        if (!profile) {
+          console.warn('[AuthContext] Failed to fetch profile, attempting to load from cache');
+          try {
+            const cachedProfile = localStorage.getItem('userProfile');
+            if (cachedProfile) {
+              profile = JSON.parse(cachedProfile);
+              console.log('[AuthContext] Loaded profile from cache:', profile);
+            }
+          } catch (error) {
+            console.error('[AuthContext] Failed to load cached profile:', error);
+          }
+        }
+
         if (mountedRef.current) {
           setUserProfile(profile);
         }
@@ -126,6 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mountedRef.current) {
         setUser(null);
         setUserProfile(null);
+        localStorage.removeItem('userProfile');
       }
     }
 
@@ -133,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
     console.log('[AuthContext] Auth state processing complete, loading set to false');
-  }, [fetchUserProfile]);
+  }, [fetchUserProfile, validateSession]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -232,6 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
     setUser(null);
     setUserProfile(null);
+    localStorage.removeItem('userProfile');
     setLoading(false);
   };
 
@@ -243,7 +355,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signInWithEmail,
       signUpWithEmail,
       signOut,
-      refreshUserProfile
+      refreshUserProfile,
+      refreshSession
     }}>
       {children}
     </AuthContext.Provider>
