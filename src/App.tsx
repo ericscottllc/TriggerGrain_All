@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -21,19 +21,9 @@ import { ClientsPage } from './pages/clients';
 import { ClientDashboardPage } from './pages/clients/ClientDashboardPage';
 
 const AppContent: React.FC = () => {
-  const { user, userProfile, loading } = useAuth();
-  const [showCodeExplorer, setShowCodeExplorer] = useState(false);
-  const [showSchemaExplorer, setShowSchemaExplorer] = useState(false);
-
-  React.useEffect(() => {
-    console.log('[AppContent] Render state:', {
-      loading,
-      hasUser: !!user,
-      userEmail: user?.email,
-      hasProfile: !!userProfile,
-      profileStatus: userProfile?.status
-    });
-  }, [loading, user, userProfile]);
+  const { user, loading, isApproved } = useAuth();
+  const [showCodeExplorer, setShowCodeExplorer] = React.useState(false);
+  const [showSchemaExplorer, setShowSchemaExplorer] = React.useState(false);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -52,21 +42,16 @@ const AppContent: React.FC = () => {
   }, []);
 
   if (loading) {
-    console.log('[AppContent] Showing loading spinner');
     return <LoadingSpinner />;
   }
 
   if (!user) {
-    console.log('[AppContent] No user, showing login page');
     return <LoginPage />;
   }
 
-  if (userProfile && userProfile.status === 'pending') {
-    console.log('[AppContent] User pending approval');
+  if (!isApproved) {
     return <PendingApprovalPage />;
   }
-
-  console.log('[AppContent] Showing main app');
 
   return (
     <>

@@ -1,9 +1,20 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Mail, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const PendingApprovalPage = () => {
-  const { user, userProfile, signOut } = useAuth();
+  const { user, signOut, refreshRole } = useAuth();
+  const [checking, setChecking] = useState(false);
+
+  const handleCheckStatus = async () => {
+    setChecking(true);
+    try {
+      await refreshRole();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 flex items-center justify-center p-6">
@@ -56,7 +67,7 @@ export const PendingApprovalPage = () => {
                   {user?.email}
                 </p>
                 <p className="text-xs text-gray-500">
-                  Status: <span className="font-medium text-yellow-600">{userProfile?.status}</span>
+                  Status: <span className="font-medium text-yellow-600">Pending</span>
                 </p>
               </div>
             </div>
@@ -66,7 +77,7 @@ export const PendingApprovalPage = () => {
                 <Mail className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-medium text-gray-800 mb-1">What happens next?</p>
-                  <p>An administrator will review your account and approve access. You'll receive an email notification once your account is activated.</p>
+                  <p>An administrator will review your account and approve access. You'll be able to access the system once your account is activated.</p>
                 </div>
               </div>
             </div>
@@ -79,10 +90,11 @@ export const PendingApprovalPage = () => {
             className="space-y-3"
           >
             <button
-              onClick={() => window.location.reload()}
-              className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+              onClick={handleCheckStatus}
+              disabled={checking}
+              className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors disabled:opacity-50"
             >
-              Check Status
+              {checking ? 'Checking...' : 'Check Status'}
             </button>
 
             <button

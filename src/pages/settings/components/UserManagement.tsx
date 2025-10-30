@@ -1,133 +1,143 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Search, Mail, Calendar, Shield, User, ChevronDown } from 'lucide-react';
+import { Users, Search, Mail, Calendar, Shield, Trash2, CheckCircle } from 'lucide-react';
 import { Card, Input, Button } from '../../../components/Shared/SharedComponents';
 import { supabase } from '../../../lib/supabase';
 import { useNotifications } from '../../../contexts/NotificationContext';
 import { LoadingSpinner } from './shared/LoadingSpinner';
 import { EmptyState } from './shared/EmptyState';
-import { filterBySearchTerm } from '../utils/filterUtils';
 
-interface User {
+interface UserWithRole {
   id: string;
   email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  is_active: boolean;
-  status: string;
+  role: string;
   created_at: string;
-  updated_at: string;
-}
-
-interface Role {
-  id: string;
-  name: string;
-  description: string | null;
-  is_active: boolean;
-}
-
-interface UserRole {
-  id: string;
-  role_id: string;
-  assigned_at: string;
-  roles: Role;
-}
-
-interface UserWithRoles extends User {
-  user_roles: UserRole[];
 }
 
 export const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<UserWithRoles[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const { success, error } = useNotifications();
 
-  const fetchData = useCallback(async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
 
-      const { data: usersData, error: usersError } = await supabase
-        .from('public_users')
-        .select(`
-          *,
-          user_roles!user_roles_user_id_fkey (
-            id,
-            role_id,
-            assigned_at,
-            roles (
-              id,
-              name,
-              description,
-              is_active
-            )
-          )
-        `)
-        .order('email', { ascending: true });
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      if (usersError) throw usersError;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users?action=list`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('roles')
-        .select('*')
-        .order('name', { ascending: true });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
 
-      if (rolesError) throw rolesError;
-
-      setUsers(usersData || []);
-      setRoles(rolesData || []);
+      const data = await response.json();
+      setUsers(data.users || []);
     } catch (err) {
-      console.error('Error fetching user management data:', err);
-      error('Failed to load data', err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error fetching users:', err);
+      error('Failed to load users', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
-  }, [error]);
+  };
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchUsers();
+  }, []);
 
-  const assignRole = async (userId: string, roleId: string) => {
+  const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      const { error: assignError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: userId,
-          role_id: roleId,
-          assigned_by: (await supabase.auth.getUser()).data.user?.id
-        });
+      setUpdatingUserId(userId);
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (assignError) throw assignError;
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      await fetchData();
-      success('Role assigned', 'Role has been successfully assigned to the user');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users?action=update`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId, newRole }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user role');
+      }
+
+      await fetchUsers();
+      success('Role updated', `User role has been successfully changed to ${newRole}`);
     } catch (err) {
-      console.error('Error assigning role:', err);
-      error('Failed to assign role', err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error updating user role:', err);
+      error('Failed to update role', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
-  const removeRole = async (userRoleId: string) => {
+  const deleteUser = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
     try {
-      const { error: removeError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('id', userRoleId);
+      setUpdatingUserId(userId);
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (removeError) throw removeError;
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      await fetchData();
-      success('Role removed', 'Role has been successfully removed from the user');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users?action=delete`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+
+      await fetchUsers();
+      success('User deleted', 'User has been successfully removed from the system');
     } catch (err) {
-      console.error('Error removing role:', err);
-      error('Failed to remove role', err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error deleting user:', err);
+      error('Failed to delete user', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
-  const filteredUsers = filterBySearchTerm(users, searchTerm, ['email', 'full_name']);
+  const filteredUsers = users.filter(user =>
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return <LoadingSpinner color="tg-primary" />;
@@ -135,13 +145,12 @@ export const UserManagement: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Users className="w-6 h-6 text-tg-primary" />
           <div>
             <h2 className="text-xl font-semibold text-gray-800">User Management</h2>
-            <p className="text-sm text-gray-600">Manage users and their role assignments</p>
+            <p className="text-sm text-gray-600">Manage user access and roles</p>
           </div>
         </div>
         <div className="text-sm text-gray-500">
@@ -149,18 +158,16 @@ export const UserManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Search */}
       <Card className="p-4">
         <Input
           icon={Search}
-          placeholder="Search users by email or name..."
+          placeholder="Search users by email..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           fullWidth
         />
       </Card>
 
-      {/* Users List */}
       <div className="grid gap-4">
         {filteredUsers.map((user, index) => (
           <motion.div
@@ -173,150 +180,62 @@ export const UserManagement: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-tg-primary rounded-full flex items-center justify-center text-white font-semibold">
-                    {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                    {user.email.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">
-                      {user.full_name || 'No name set'}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Mail className="w-4 h-4" />
-                      <span>{user.email}</span>
-                    </div>
+                    <h3 className="font-semibold text-gray-800">{user.email}</h3>
                     <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
                       <Calendar className="w-3 h-3" />
                       <span>Joined {new Date(user.created_at).toLocaleDateString()}</span>
-                      <span className="mx-1">•</span>
-                      <span className={
-                        user.status === 'active' ? 'text-green-600' :
-                        user.status === 'pending' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }>
-                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                      </span>
                     </div>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-4">
-                  {/* Current Roles Display */}
-                  <div className="flex flex-wrap gap-1 justify-end">
-                    {user.user_roles && user.user_roles.length > 0 ? (
-                      user.user_roles.map((userRole, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-1 px-2 py-1 bg-tg-primary/10 text-tg-primary rounded-full text-xs"
-                        >
-                          {userRole.roles.name === 'Admin' ? (
-                            <Shield className="w-3 h-3" />
-                          ) : (
-                            <User className="w-3 h-3" />
-                          )}
-                          <span>{userRole.roles.name}</span>
-                        </div>
-                      ))
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-tg-primary/10 text-tg-primary rounded-full text-sm font-medium">
+                    {user.role === 'ADMIN' ? (
+                      <Shield className="w-4 h-4" />
                     ) : (
-                      <span className="text-xs text-gray-500 italic">No roles assigned</span>
+                      <Mail className="w-4 h-4" />
                     )}
+                    <span>{user.role}</span>
                   </div>
 
-                  {/* Manage Roles Button */}
+                  {user.role === 'PENDING' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={CheckCircle}
+                      onClick={() => updateUserRole(user.id, 'ADMIN')}
+                      disabled={updatingUserId === user.id}
+                    >
+                      {updatingUserId === user.id ? 'Approving...' : 'Approve'}
+                    </Button>
+                  )}
+
+                  {user.role === 'ADMIN' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => updateUserRole(user.id, 'PENDING')}
+                      disabled={updatingUserId === user.id}
+                    >
+                      {updatingUserId === user.id ? 'Revoking...' : 'Revoke Access'}
+                    </Button>
+                  )}
+
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    icon={ChevronDown}
-                    onClick={() => setExpandedUser(expandedUser === user.id ? null : user.id)}
+                    icon={Trash2}
+                    onClick={() => deleteUser(user.id)}
+                    disabled={updatingUserId === user.id}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
-                    Manage Roles
+                    Delete
                   </Button>
                 </div>
               </div>
-
-              {/* Expanded Role Management */}
-              {expandedUser === user.id && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="mt-4 pt-4 border-t border-gray-200"
-                >
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {/* Current Roles */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Current Roles:</h4>
-                      <div className="space-y-2">
-                        {user.user_roles.length > 0 ? (
-                          user.user_roles.map((userRole) => (
-                            <div
-                              key={userRole.id}
-                              className="flex items-center justify-between p-2 bg-tg-primary/5 rounded-lg"
-                            >
-                              <div className="flex items-center gap-2">
-                                {userRole.roles.name === 'Admin' ? (
-                                  <Shield className="w-4 h-4 text-tg-primary" />
-                                ) : (
-                                  <User className="w-4 h-4 text-tg-primary" />
-                                )}
-                                <span className="text-sm font-medium">{userRole.roles.name}</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeRole(userRole.id)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">No roles assigned</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Available Roles */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Available Roles:</h4>
-                      <div className="space-y-2">
-                        {roles
-                          .filter(role => !user.user_roles.some(ur => ur.role_id === role.id))
-                          .map((role) => (
-                            <div
-                              key={role.id}
-                              className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
-                            >
-                              <div className="flex items-center gap-2">
-                                {role.name === 'Admin' ? (
-                                  <Shield className="w-4 h-4 text-gray-600" />
-                                ) : (
-                                  <User className="w-4 h-4 text-gray-600" />
-                                )}
-                                <div>
-                                  <span className="text-sm font-medium">{role.name}</span>
-                                  {role.description && (
-                                    <p className="text-xs text-gray-500">{role.description}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => assignRole(user.id, role.id)}
-                              >
-                                Assign
-                              </Button>
-                            </div>
-                          ))}
-                        {roles.filter(role => !user.user_roles.some(ur => ur.role_id === role.id)).length === 0 && (
-                          <p className="text-sm text-gray-500 italic">All available roles assigned</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
             </Card>
           </motion.div>
         ))}
@@ -327,7 +246,7 @@ export const UserManagement: React.FC = () => {
           <EmptyState
             icon={Users}
             title="No users found"
-            description={searchTerm ? 'Try adjusting your search terms' : 'No active users available'}
+            description={searchTerm ? 'Try adjusting your search terms' : 'No users available'}
           />
         </Card>
       )}
