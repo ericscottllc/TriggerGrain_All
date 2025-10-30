@@ -42,7 +42,7 @@ export const Sidebar: React.FC = () => {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-800">
-                    TriggerGrain
+                    Trigger Grain
                   </h1>
                   <p className="text-xs text-gray-500">Grain Management</p>
                 </div>
