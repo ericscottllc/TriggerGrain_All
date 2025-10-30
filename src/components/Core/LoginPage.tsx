@@ -5,7 +5,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import { LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { signInWithEmail, signUpWithEmail } = useAuth();
+  const { signIn, signUp } = useAuth();
   const { error: showError, success: showSuccess } = useNotifications();
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -32,20 +32,20 @@ export const LoginPage: React.FC = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await signUpWithEmail(email, password, fullName);
+        const { error } = await signUp(email, password);
 
         if (error) {
           showError('Sign Up Failed', error.message);
           setError(error.message);
         } else {
-          showSuccess('Account Created', 'Please check your email to confirm your account');
+          showSuccess('Account Created', 'Your account has been created and is pending approval');
           setEmail('');
           setPassword('');
           setFullName('');
           setIsSignUp(false);
         }
       } else {
-        const { error } = await signInWithEmail(email, password);
+        const { error } = await signIn(email, password);
 
         if (error) {
           showError('Sign In Failed', error.message);
