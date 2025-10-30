@@ -326,6 +326,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     mountedRef.current = true;
     console.log('[AuthContext] useEffect running, setting up auth');
 
+    if (isInitializedRef.current) {
+      console.log('[AuthContext] Already initialized, skipping setup');
+      return;
+    }
+
     const initializeAuth = async () => {
       console.log('[AuthContext] Initializing auth...');
       try {
@@ -396,7 +401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!sessionCheckIntervalRef.current) {
           sessionCheckIntervalRef.current = setInterval(() => {
-            if (!document.hidden && user) {
+            if (!document.hidden) {
               console.log('[AuthContext] Periodic session check');
               checkAndRecoverSession();
             }
@@ -426,7 +431,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('storage', handleStorageChange);
 
     sessionCheckIntervalRef.current = setInterval(() => {
-      if (!document.hidden && user) {
+      if (!document.hidden) {
         console.log('[AuthContext] Periodic session check');
         checkAndRecoverSession();
       }
@@ -444,7 +449,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionCheckIntervalRef.current = null;
       }
     };
-  }, [handleAuthStateChange, checkAndRecoverSession, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
     console.log('[AuthContext] signInWithEmail called for:', email);
