@@ -210,7 +210,7 @@ export const useGrainEntryData = () => {
     if (error) throw error;
   }, [user, cropClasses]);
 
-  const fetchGrainEntries = useCallback(async (filters?: any) => {
+  const fetchGrainEntries = useCallback(async (filters?: any): Promise<number> => {
     try {
       setQueryLoading(true);
 
@@ -335,10 +335,12 @@ export const useGrainEntryData = () => {
 
       setEntries(entriesWithRegions);
       setHasQueriedEntries(true);
+      return entriesWithRegions.length;
     } catch (error) {
       console.error('Error fetching grain entries:', error);
       setEntries([]);
       setHasQueriedEntries(true);
+      return 0;
     } finally {
       setQueryLoading(false);
     }

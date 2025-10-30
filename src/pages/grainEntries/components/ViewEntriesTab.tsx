@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, Trash2, ChevronUp, ChevronDown, Calendar, MapPin, Building, Brain as Grain, DollarSign, TrendingUp } from 'lucide-react';
+import { Eye, Trash2, Edit, ChevronUp, ChevronDown, Calendar, MapPin, Building, Brain as Grain, DollarSign, TrendingUp } from 'lucide-react';
 import { Card, Button, Modal } from '../../../components/Shared/SharedComponents';
 import { QueryFilters } from './QueryFilters';
 import { useGrainEntryData } from '../hooks/useGrainEntryData';
@@ -15,13 +15,14 @@ type SortDirection = 'asc' | 'desc';
 export const ViewEntriesTab: React.FC = () => {
   const { user } = useAuth();
   const { success, error } = useNotifications();
-  const { 
-    entries, 
+  const {
+    entries,
     cropClasses,
     loading,
     queryLoading,
     hasQueriedEntries,
-    fetchGrainEntries, 
+    fetchGrainEntries,
+    updateGrainEntry,
     deleteGrainEntry,
     fetchFilterOptions
   } = useGrainEntryData();
@@ -32,6 +33,19 @@ export const ViewEntriesTab: React.FC = () => {
     isOpen: false,
     entryId: null,
     entryDetails: ''
+  });
+  const [editEntry, setEditEntry] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    date: '',
+    crop_id: '',
+    class_id: '',
+    elevator_id: '',
+    town_id: '',
+    month: '',
+    year: 0,
+    cash_price: '',
+    futures: '',
+    basis: ''
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [filters, setFilters] = useState<QueryFiltersType>({
@@ -66,12 +80,12 @@ export const ViewEntriesTab: React.FC = () => {
 
   const handleQueryEntries = useCallback(async () => {
     try {
-      await fetchGrainEntries(filters);
-      success('Success', `Loaded ${entries.length} grain entries`);
+      const count = await fetchGrainEntries(filters);
+      success('Success', `Loaded ${count} grain entries`);
     } catch (err) {
       error('Query Failed', 'Failed to load grain entries');
     }
-  }, [filters, fetchGrainEntries, success, error, entries.length]);
+  }, [filters, fetchGrainEntries, success, error]);
 
 
   // Sort entries
@@ -154,7 +168,7 @@ export const ViewEntriesTab: React.FC = () => {
   // Confirm delete
   const confirmDelete = async () => {
     if (!deleteConfirmation.entryId) return;
-    
+
     try {
       await deleteGrainEntry(deleteConfirmation.entryId);
       success('Success', 'Entry deleted successfully');
@@ -162,6 +176,72 @@ export const ViewEntriesTab: React.FC = () => {
     } catch (err) {
       console.error('Error deleting entry:', err);
       error('Delete Failed', 'Failed to delete entry');
+    }
+  };
+
+  // Open edit modal
+  const openEditModal = useCallback((entry: any) => {
+    setEditEntry(entry);
+    setEditForm({
+      date: entry.date,
+      crop_id: entry.crop_id,
+      class_id: entry.class_id,
+      elevator_id: entry.elevator_id,
+      town_id: entry.town_id,
+      month: entry.month,
+      year: entry.year,
+      cash_price: entry.cash_price || '',
+      futures: entry.futures || '',
+      basis: entry.basis || ''
+    });
+  }, []);
+
+  // Close edit modal
+  const closeEditModal = useCallback(() => {
+    setEditEntry(null);
+    setEditForm({
+      date: '',
+      crop_id: '',
+      class_id: '',
+      elevator_id: '',
+      town_id: '',
+      month: '',
+      year: 0,
+      cash_price: '',
+      futures: '',
+      basis: ''
+    });
+  }, []);
+
+  // Handle edit form changes
+  const handleEditChange = (field: string, value: any) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Confirm edit
+  const confirmEdit = async () => {
+    if (!editEntry) return;
+
+    try {
+      await updateGrainEntry(editEntry.id, {
+        date: editForm.date,
+        crop_id: editForm.crop_id,
+        class_id: editForm.class_id,
+        elevator_id: editForm.elevator_id,
+        town_id: editForm.town_id,
+        month: editForm.month,
+        year: editForm.year,
+        cash_price: parseFloat(editForm.cash_price) || null,
+        futures: parseFloat(editForm.futures) || null,
+        basis: parseFloat(editForm.basis) || null
+      });
+
+      const count = await fetchGrainEntries(filters);
+      success('Success', 'Entry updated successfully');
+      closeEditModal();
+    } catch (err) {
+      console.error('Error updating entry:', err);
+      error('Update Failed', 'Failed to update entry');
     }
   };
 
@@ -395,13 +475,22 @@ export const ViewEntriesTab: React.FC = () => {
                         {/* Actions */}
                         {isAdmin && (
                           <td className="px-2 py-1">
-                            <button
-                              onClick={() => showDeleteConfirmation(entry)}
-                              className="p-1 text-red-600 hover:text-red-800 transition-colors"
-                              title="Delete entry"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEditModal(entry)}
+                                className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                                title="Edit entry"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => showDeleteConfirmation(entry)}
+                                className="p-1 text-red-600 hover:text-red-800 transition-colors"
+                                title="Delete entry"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </td>
                         )}
                       </motion.tr>
@@ -442,6 +531,174 @@ export const ViewEntriesTab: React.FC = () => {
               onClick={confirmDelete}
             >
               Delete Entry
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Entry Modal */}
+      <Modal
+        isOpen={!!editEntry}
+        onClose={closeEditModal}
+        title="Edit Grain Entry"
+        size="lg"
+      >
+        <div className="p-6">
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={editForm.date}
+                onChange={(e) => handleEditChange('date', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              />
+            </div>
+
+            {/* Crop */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Crop
+              </label>
+              <select
+                value={editForm.crop_id}
+                onChange={(e) => handleEditChange('crop_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              >
+                <option value="">Select Crop</option>
+                {filterOptions.crops.map((crop: any) => (
+                  <option key={crop.id} value={crop.id}>
+                    {crop.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Class */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Class
+              </label>
+              <select
+                value={editForm.class_id}
+                onChange={(e) => handleEditChange('class_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              >
+                <option value="">Select Class</option>
+                {cropClasses
+                  .filter(cc => cc.crop_id === editForm.crop_id)
+                  .map((cropClass: any) => (
+                    <option key={cropClass.id} value={cropClass.id}>
+                      {cropClass.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Elevator */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Elevator
+              </label>
+              <select
+                value={editForm.elevator_id}
+                onChange={(e) => handleEditChange('elevator_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              >
+                <option value="">Select Elevator</option>
+                {filterOptions.elevators.map((elevator: any) => (
+                  <option key={elevator.id} value={elevator.id}>
+                    {elevator.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Town */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Town
+              </label>
+              <select
+                value={editForm.town_id}
+                onChange={(e) => handleEditChange('town_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              >
+                <option value="">Select Town</option>
+                {filterOptions.towns.map((town: any) => (
+                  <option key={town.id} value={town.id}>
+                    {town.name}
+                    {town.province && `, ${town.province}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Year */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Year
+              </label>
+              <input
+                type="number"
+                value={editForm.year}
+                onChange={(e) => handleEditChange('year', parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              />
+            </div>
+
+            {/* Cash Price */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cash Price ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={editForm.cash_price}
+                onChange={(e) => handleEditChange('cash_price', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              />
+            </div>
+
+            {/* Futures */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Futures ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={editForm.futures}
+                onChange={(e) => handleEditChange('futures', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              />
+            </div>
+
+            {/* Basis */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Basis
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={editForm.basis}
+                onChange={(e) => handleEditChange('basis', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tg-green focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 justify-end">
+            <Button variant="ghost" onClick={closeEditModal}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={confirmEdit}>
+              Save Changes
             </Button>
           </div>
         </div>
