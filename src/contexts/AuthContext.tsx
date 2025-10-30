@@ -137,6 +137,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, fetchUserProfile]);
 
+  const validateSession = useCallback(async (session: Session): Promise<boolean> => {
+    if (!session || !session.access_token) {
+      console.log('[AuthContext] Invalid session: missing access token');
+      return false;
+    }
+
+    const expiresAt = session.expires_at;
+    if (expiresAt) {
+      const expiryTime = expiresAt * 1000;
+      const now = Date.now();
+      const timeUntilExpiry = expiryTime - now;
+
+      console.log('[AuthContext] Session expires in:', Math.floor(timeUntilExpiry / 1000 / 60), 'minutes');
+
+      if (timeUntilExpiry < 5 * 60 * 1000) {
+        console.log('[AuthContext] Session expiring soon, refreshing...');
+        try {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.error('[AuthContext] Failed to refresh expiring session:', error);
+            return false;
+          }
+          if (data.session) {
+            console.log('[AuthContext] Session refreshed successfully');
+            return true;
+          }
+        } catch (error) {
+          console.error('[AuthContext] Exception refreshing session:', error);
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }, []);
+
   const refreshSession = useCallback(async () => {
     console.log('[AuthContext] Manually refreshing session');
     try {
@@ -230,42 +266,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isRecoveringSessionRef.current = false;
     }
   }, [user, validateSession, fetchUserProfile]);
-
-  const validateSession = useCallback(async (session: Session): Promise<boolean> => {
-    if (!session || !session.access_token) {
-      console.log('[AuthContext] Invalid session: missing access token');
-      return false;
-    }
-
-    const expiresAt = session.expires_at;
-    if (expiresAt) {
-      const expiryTime = expiresAt * 1000;
-      const now = Date.now();
-      const timeUntilExpiry = expiryTime - now;
-
-      console.log('[AuthContext] Session expires in:', Math.floor(timeUntilExpiry / 1000 / 60), 'minutes');
-
-      if (timeUntilExpiry < 5 * 60 * 1000) {
-        console.log('[AuthContext] Session expiring soon, refreshing...');
-        try {
-          const { data, error } = await supabase.auth.refreshSession();
-          if (error) {
-            console.error('[AuthContext] Failed to refresh expiring session:', error);
-            return false;
-          }
-          if (data.session) {
-            console.log('[AuthContext] Session refreshed successfully');
-            return true;
-          }
-        } catch (error) {
-          console.error('[AuthContext] Exception refreshing session:', error);
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }, []);
 
   const handleAuthStateChange = useCallback(async (session: Session | null) => {
     console.log('[AuthContext] handleAuthStateChange called, session:', !!session);
